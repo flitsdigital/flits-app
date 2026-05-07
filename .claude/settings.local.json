@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(npx create-vite@latest . --template react-ts --force)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5174)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(mkdir -p /Users/jordiklavers/Documents/claude/crm/.claude)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc *)",
+      "Bash(curl -s 'https://hsjcxglbzhpewbdryneu.supabase.co/rest/v1/clients?select=id,company_name,status&order=company_name' -H 'apikey: sb_publishable_7F8fr1ficQQrYjCJ05tpaQ_ScAUOEKt' -H 'Authorization: Bearer sb_publishable_7F8fr1ficQQrYjCJ05tpaQ_ScAUOEKt')",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}
