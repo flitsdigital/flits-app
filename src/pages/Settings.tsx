@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Check, Shield, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { supabaseAdmin } from '../lib/supabase'
 import { useAuthStore } from '../store/useAuthStore'
+import { PageHeader } from '../components/PageHeader'
 import type { UserProfile, AppPage, UserRole } from '../types'
 import clsx from 'clsx'
 
@@ -326,8 +327,9 @@ export function Settings() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-lg font-semibold text-text-primary mb-6">Instellingen</h1>
+    <div>
+      <PageHeader title="Instellingen" />
+      <div className="p-6 max-w-2xl mx-auto">
 
       {/* Mijn account */}
       <section className="bg-surface-1 border border-border-subtle rounded-xl mb-4">
@@ -466,6 +468,7 @@ export function Settings() {
           onDeleted={loadUsers}
         />
       )}
+      </div>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -8,37 +8,83 @@ import {
   Settings,
   LogOut,
   Kanban,
-} from 'lucide-react'
-import clsx from 'clsx'
-import { useAuthStore } from '../store/useAuthStore'
-import type { AppPage } from '../types'
+} from "lucide-react";
+import clsx from "clsx";
+import { useAuthStore } from "../store/useAuthStore";
+import type { AppPage } from "../types";
 
-const ALL_NAV: { to: string; label: string; icon: React.ElementType; exact: boolean; page: AppPage }[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true, page: 'dashboard' },
-  { to: '/clients', label: 'Klanten', icon: Users, exact: false, page: 'clients' },
-  { to: '/timeline', label: 'Timeline', icon: GanttChart, exact: false, page: 'timeline' },
-  { to: '/content', label: 'Content', icon: CalendarDays, exact: false, page: 'content' },
-  { to: '/reiskosten', label: 'Reiskosten', icon: Car, exact: false, page: 'reiskosten' },
-  { to: '/projects',   label: 'Projecten',  icon: Kanban, exact: false, page: 'projects' },
-]
+const ALL_NAV: {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+  exact: boolean;
+  page: AppPage;
+}[] = [
+  {
+    to: "/",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+    page: "dashboard",
+  },
+  {
+    to: "/clients",
+    label: "Klanten",
+    icon: Users,
+    exact: false,
+    page: "clients",
+  },
+  {
+    to: "/timeline",
+    label: "Timeline",
+    icon: GanttChart,
+    exact: false,
+    page: "timeline",
+  },
+  {
+    to: "/content",
+    label: "Content",
+    icon: CalendarDays,
+    exact: false,
+    page: "content",
+  },
+  {
+    to: "/reiskosten",
+    label: "Reiskosten",
+    icon: Car,
+    exact: false,
+    page: "reiskosten",
+  },
+  {
+    to: "/projects",
+    label: "Projecten",
+    icon: Kanban,
+    exact: false,
+    page: "projects",
+  },
+];
 
 export function Sidebar() {
-  const profile = useAuthStore((s) => s.profile)
-  const signOut = useAuthStore((s) => s.signOut)
+  const profile = useAuthStore((s) => s.profile);
+  const signOut = useAuthStore((s) => s.signOut);
 
-  const isAdmin = profile?.role === 'admin'
-  const nav = ALL_NAV.filter(({ page }) => isAdmin || (profile?.allowed_pages ?? []).includes(page))
+  const isAdmin = profile?.role === "admin";
+  const nav = ALL_NAV.filter(
+    ({ page }) => isAdmin || (profile?.allowed_pages ?? []).includes(page),
+  );
 
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0">
       {/* Logo */}
-      <div className="px-4 py-[13px] border-b border-border-subtle">
+      <div className="h-14 flex items-center px-4 border-b border-border-subtle">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-accent-blue flex items-center justify-center shrink-0">
             <span className="text-white text-xs font-bold">A</span>
           </div>
           <div>
-            <p className="text-sm font-semibold text-text-primary leading-none">Agency CRM</p>
+            <p className="text-sm font-semibold text-text-primary leading-none">
+              Agency CRM
+            </p>
             <p className="text-[11px] text-text-muted mt-0.5">Social Media</p>
           </div>
         </div>
@@ -53,10 +99,10 @@ export function Sidebar() {
             end={exact}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
-                  ? 'bg-white/[0.07] text-text-primary font-medium'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                  ? "bg-white/[0.07] text-text-primary font-medium"
+                  : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
               )
             }
           >
@@ -74,10 +120,10 @@ export function Sidebar() {
             to="/settings"
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
-                  ? 'bg-white/[0.07] text-text-primary font-medium'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                  ? "bg-white/[0.07] text-text-primary font-medium"
+                  : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
               )
             }
           >
@@ -88,7 +134,9 @@ export function Sidebar() {
 
         {/* Naam + uitloggen */}
         {profile?.name && (
-          <p className="px-3 pt-1 text-xs text-text-muted truncate">{profile.name}</p>
+          <p className="px-3 pt-1 text-xs text-text-muted truncate">
+            {profile.name}
+          </p>
         )}
         <button
           onClick={() => signOut()}
@@ -99,5 +147,5 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
-  )
+  );
 }

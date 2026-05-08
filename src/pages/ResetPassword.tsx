@@ -16,11 +16,21 @@ export function ResetPassword() {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    // Als er al een actieve sessie is zonder recovery-token, stuur terug naar login
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && !window.location.hash.includes('type=recovery')) {
+        navigate('/login', { replace: true })
+      }
+    })
+
     // Supabase verwerkt de tokens uit de URL hash automatisch en stuurt
     // een PASSWORD_RECOVERY event als het een geldige reset-link is.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setReady(true)
+      } else if (event === 'SIGNED_IN') {
+        // Ingelogd zonder recovery-flow → terug naar login
+        navigate('/login', { replace: true })
       } else if (event === 'SIGNED_OUT') {
         setInvalid(true)
       }
@@ -28,9 +38,9 @@ export function ResetPassword() {
 
     // Fallback: als er na 4 seconden nog geen event is, is de link ongeldig
     const timer = window.setTimeout(() => {
-      setInvalid((prev) => {
-        if (!ready) return true
-        return prev
+      setReady((r) => {
+        if (!r) setInvalid(true)
+        return r
       })
     }, 4000)
 

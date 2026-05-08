@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { PostForm } from "../components/PostForm";
+import { PageHeader } from "../components/PageHeader";
 import {
   postStatusDot,
   postStatusColor,
@@ -615,56 +616,39 @@ export function Content() {
   }
 
   return (
-    <div className="px-8 py-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Content</h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            Content kalender — alle klanten
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            className="bg-surface-2 border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-            value={filterClientId}
-            onChange={(e) => setFilterClientId(e.target.value)}
-          >
-            <option value="all">Alle klanten</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.companyName}
-              </option>
-            ))}
-          </select>
-          {/* View toggle */}
-          <div className="flex items-center gap-1 bg-surface-2 border border-border-subtle rounded-lg p-1">
-            {(["month", "week", "list"] as ViewMode[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === v ? "bg-white/[0.08] text-text-primary" : "text-text-muted hover:text-text-secondary"}`}
-              >
-                {v === "month" ? "Maand" : v === "week" ? "Week" : "Lijst"}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setPlanModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-border-subtle hover:border-zinc-600 text-text-secondary hover:text-text-primary text-sm font-medium rounded-lg transition-colors"
-          >
-            <CalendarRange size={14} />
-            Content plannen
-          </button>
-          <button
-            onClick={() => openNewPost()}
-            className="flex items-center gap-2 px-4 py-2 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Plus size={15} />
-            Post toevoegen
-          </button>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Content"
+        subtitle="Content kalender"
+        actions={
+          <>
+            <select
+              className="bg-surface-1 border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
+              value={filterClientId}
+              onChange={(e) => setFilterClientId(e.target.value)}
+            >
+              <option value="all">Alle klanten</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.companyName}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
+              {(["month", "week", "list"] as ViewMode[]).map((v) => (
+                <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === v ? "bg-white/[0.08] text-text-primary" : "text-text-muted hover:text-text-secondary"}`}>
+                  {v === "month" ? "Maand" : v === "week" ? "Week" : "Lijst"}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setPlanModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 border border-border-subtle hover:border-zinc-600 text-text-secondary hover:text-text-primary text-sm font-medium rounded-lg transition-colors">
+              <CalendarRange size={14} /> Content plannen
+            </button>
+            <button onClick={() => openNewPost()} className="flex items-center gap-2 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+              <Plus size={14} /> Post toevoegen
+            </button>
+          </>
+        }
+      />
+      <div className="px-8 py-6 max-w-7xl mx-auto">
 
       {/* Stats — alleen bij kalenderviews */}
       <div className={`flex items-center gap-4 mb-5 ${viewMode === "list" ? "hidden" : ""}`}>
@@ -1131,6 +1115,7 @@ export function Content() {
           onGenerated={() => setPlanModalOpen(false)}
         />
       )}
+      </div>
     </div>
   );
 }

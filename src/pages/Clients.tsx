@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, Users } from 'lucide-react'
+import { PageHeader } from '../components/PageHeader'
 import { parseISO, differenceInDays, startOfDay } from 'date-fns'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
@@ -73,21 +74,21 @@ export function Clients() {
   }
 
   return (
-    <div className="px-8 py-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Klanten</h1>
-          <p className="text-sm text-text-muted mt-0.5">{clients.length} klanten totaal</p>
-        </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus size={15} />
-          Klant toevoegen
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        title="Klanten"
+        subtitle={`${clients.length} klanten`}
+        actions={
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus size={14} />
+            Klant toevoegen
+          </button>
+        }
+      />
+      <div className="px-8 py-6 max-w-7xl mx-auto">
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4">
@@ -188,6 +189,7 @@ export function Clients() {
           setShowForm(false)
         }}
       />
+      </div>
     </div>
   )
 }

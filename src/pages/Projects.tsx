@@ -1366,7 +1366,7 @@ export function Projects() {
       <main className="flex-1 overflow-y-auto">
         {leftNav === 'overview' ? (
           <>
-            <div className="flex items-center justify-between px-6 py-[13px] border-b border-border-subtle">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
               <div>
                 <h1 className="text-sm font-semibold text-text-primary">Alle taken</h1>
                 <p className="text-xs text-text-muted mt-0.5">{allTasks.length} taken over {projects.length} projecten</p>
@@ -1390,7 +1390,7 @@ export function Projects() {
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between px-6 py-[13px] border-b border-border-subtle">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
               <div>
                 <h1 className="text-sm font-semibold text-text-primary">
                   {selectedClientId ? clients.find(c => c.id === selectedClientId)?.companyName : 'Projecten'}

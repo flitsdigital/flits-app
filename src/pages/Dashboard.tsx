@@ -7,6 +7,7 @@ import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceStatus, formatWeek, formatWeekDate, formatCycle, calcMonthlyRevenue } from '../lib/billing'
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
+import { PageHeader } from '../components/PageHeader'
 
 function KpiCard({
   label,
@@ -74,12 +75,9 @@ export function Dashboard() {
     .slice(0, 5)
 
   return (
-    <div className="px-8 py-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-text-primary">Dashboard</h1>
-        <p className="text-sm text-text-muted mt-1">{format(new Date(), "EEEE d MMMM yyyy")}</p>
-      </div>
+    <div>
+      <PageHeader title="Dashboard" subtitle={format(new Date(), "EEEE d MMMM yyyy")} />
+      <div className="px-8 py-6 max-w-7xl mx-auto">
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -207,6 +205,7 @@ export function Dashboard() {
             })}
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

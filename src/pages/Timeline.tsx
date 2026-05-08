@@ -18,6 +18,7 @@ import { nl } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceTimeline, getInvoiceStatus, formatWeek, formatWeekDate } from '../lib/billing'
+import { PageHeader } from '../components/PageHeader'
 import type { Client } from '../types'
 
 const COL_WIDTH = 44 // pixels per week column
@@ -125,44 +126,30 @@ export function Timeline() {
   }, [weeks])
 
   return (
-    <div className="px-8 py-8 max-w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Timeline</h1>
-          <p className="text-sm text-text-muted mt-0.5">Visueel overzicht van abonnementen en factuurmomenten</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Filter */}
-          <div className="flex items-center gap-1 bg-surface-2 border border-border-subtle rounded-lg p-1">
-            {(['all', 'active', 'paused'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilterStatus(f)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  filterStatus === f ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                {f === 'all' ? 'Alle' : f === 'active' ? 'Actief' : 'Gepauzeerd'}
-              </button>
-            ))}
-          </div>
-          {/* View toggle */}
-          <div className="flex items-center gap-1 bg-surface-2 border border-border-subtle rounded-lg p-1">
-            {(['weeks', 'months'] as ViewMode[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === v ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                {v === 'weeks' ? '26 weken' : '52 weken'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Timeline"
+        subtitle="Factuurmomenten"
+        actions={
+          <>
+            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
+              {(['all', 'active', 'paused'] as const).map((f) => (
+                <button key={f} onClick={() => setFilterStatus(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filterStatus === f ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
+                  {f === 'all' ? 'Alle' : f === 'active' ? 'Actief' : 'Gepauzeerd'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
+              {(['weeks', 'months'] as ViewMode[]).map((v) => (
+                <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === v ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
+                  {v === 'weeks' ? '26 weken' : '52 weken'}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
+      <div className="px-8 py-6 max-w-full">
 
       {/* Legend */}
       <div className="flex items-center gap-5 mb-5 text-xs text-text-muted">
@@ -413,6 +400,7 @@ export function Timeline() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -8,11 +8,12 @@ import {
   parseISO, isWithinInterval,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check } from 'lucide-react'
 import { supabase, supabaseAdmin } from '../lib/supabase'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
+import { PageHeader } from '../components/PageHeader'
 import type { TravelExpense, UserProfile } from '../types'
 import clsx from 'clsx'
 
@@ -326,9 +327,173 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
   )
 }
 
+// ─── Bulk modal (meerdere datums) ─────────────────────────────────────────────
+
+function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClose: () => void; onSaved: () => void }) {
+  const clients = useStore((s) => s.clients)
+  const session = useAuthStore((s) => s.session)
+  const { presets, addPreset, removePreset } = useRoutePresets(session?.user.id)
+
+  const [clientId, setClientId] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [returnTrip, setReturnTrip] = useState(false)
+  const [kilometers, setKilometers] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [savingPreset, setSavingPreset] = useState(false)
+  const [presetLabel, setPresetLabel] = useState('')
+
+  const km = parseFloat(kilometers) || 0
+  const total = returnTrip ? km * 2 : km
+
+  function applyPreset(p: RoutePreset) {
+    setFrom(p.from); setTo(p.to); setKilometers(p.kilometers.toString()); setReturnTrip(p.returnTrip)
+  }
+
+  function handleSavePreset() {
+    if (!from || !to || !km) return
+    addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
+    setSavingPreset(false); setPresetLabel('')
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null); setLoading(true)
+    const now = new Date().toISOString()
+    const rows = dates.map((date) => ({
+      id: Math.random().toString(36).slice(2, 10),
+      user_id: session?.user.id,
+      client_id: clientId || null,
+      date,
+      from_location: from,
+      to_location: to,
+      return_trip: returnTrip,
+      kilometers: km,
+      created_at: now,
+      updated_at: now,
+    }))
+    try {
+      const { error: err } = await supabase.from('travel_expenses').insert(rows)
+      if (err) throw err
+      onSaved(); onClose()
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)) }
+    finally { setLoading(false) }
+  }
+
+  const sorted = [...dates].sort()
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+          <div>
+            <h2 className="text-sm font-semibold text-text-primary">Rit toevoegen voor {dates.length} datum{dates.length !== 1 ? 's' : ''}</h2>
+            <p className="text-xs text-text-muted mt-0.5">Dezelfde rit wordt opgeslagen voor elke geselecteerde dag</p>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
+        </div>
+
+        {/* Selected dates chips */}
+        <div className="px-5 pt-4 flex flex-wrap gap-1.5">
+          {sorted.map((d) => (
+            <span key={d} className="px-2 py-0.5 bg-accent-blue/15 border border-accent-blue/30 text-accent-blue text-xs rounded-md">
+              {format(parseISO(d), 'd MMM', { locale: nl })}
+            </span>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Presets */}
+          {presets.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-text-secondary mb-1.5">Snelle routes</p>
+              <div className="flex flex-wrap gap-1.5">
+                {presets.map((p) => (
+                  <div key={p.id} className="group flex items-center gap-1 bg-surface-0 border border-border-subtle rounded-lg pl-2.5 pr-1 py-1">
+                    <button type="button" onClick={() => applyPreset(p)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">{p.label}</button>
+                    <button type="button" onClick={() => removePreset(p.id)} className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"><X size={10} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Van → Naar */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">Van</label>
+              <input type="text" value={from} onChange={(e) => setFrom(e.target.value)} required placeholder="Vertrekpunt" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">Naar</label>
+              <input type="text" value={to} onChange={(e) => setTo(e.target.value)} required placeholder="Bestemming" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            </div>
+          </div>
+
+          {/* Km + retour */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">Km (enkele reis)</label>
+              <input type="number" value={kilometers} onChange={(e) => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1.5">Retour</label>
+              <button type="button" onClick={() => setReturnTrip((v) => !v)} className={clsx('w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm transition-colors', returnTrip ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-white/[0.04]')}>
+                <RotateCcw size={13} />{returnTrip ? 'Ja' : 'Nee'}
+              </button>
+            </div>
+          </div>
+
+          {/* Sla op als preset */}
+          {from && to && km > 0 && (
+            savingPreset ? (
+              <div className="flex gap-2 items-center">
+                <input type="text" value={presetLabel} onChange={(e) => setPresetLabel(e.target.value)} placeholder={`${from} → ${to}`} autoFocus className="flex-1 px-3 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+                <button type="button" onClick={handleSavePreset} className="px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs rounded-lg transition-colors">Opslaan</button>
+                <button type="button" onClick={() => setSavingPreset(false)} className="px-2 py-1.5 text-text-muted hover:text-text-primary transition-colors"><X size={13} /></button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setSavingPreset(true)} className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
+                <Plus size={11} /> Sla op als snelle route
+              </button>
+            )
+          )}
+
+          {/* Klant */}
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1.5">Klant <span className="text-text-muted font-normal">(optioneel)</span></label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors">
+              <option value="">— Geen klant —</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+            </select>
+          </div>
+
+          {/* Berekening */}
+          {km > 0 && (
+            <div className="bg-surface-0 rounded-lg px-4 py-3 flex items-center justify-between">
+              <span className="text-xs text-text-muted">{km} km{returnTrip ? ' × 2 (retour)' : ''} × €{RATE} × {dates.length} dag{dates.length !== 1 ? 'en' : ''}</span>
+              <span className="text-sm font-semibold text-text-primary">{fmt(total * RATE * dates.length)}</span>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">Annuleren</button>
+            <button type="submit" disabled={loading} className="flex-1 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+              {loading ? 'Bezig…' : `${dates.length} rit${dates.length !== 1 ? 'ten' : ''} toevoegen`}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Week view ────────────────────────────────────────────────────────────────
 
-function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick }: {
+function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick, selectMode, selectedDates, onDateToggle }: {
   expenses: TravelExpense[]
   range: DateRange
   clients: { id: string; companyName: string }[]
@@ -336,6 +501,9 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
   isAdmin: boolean
   onEdit: (e: TravelExpense) => void
   onDayClick: (date: string) => void
+  selectMode: boolean
+  selectedDates: Set<string>
+  onDateToggle: (date: string) => void
 }) {
   const days = eachDayOfInterval({ start: range.start, end: range.end })
 
@@ -344,17 +512,20 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
       {/* Day headers */}
       <div className="grid grid-cols-7 border-b border-border-subtle">
         {days.map((day) => {
+          const dateStr = format(day, 'yyyy-MM-dd')
           const dayExpenses = expenses.filter((e) => isSameDay(parseISO(e.date), day))
           const dayKm = dayExpenses.reduce((s, e) => s + totalKm(e), 0)
+          const selected = selectedDates.has(dateStr)
           return (
-            <div key={day.toISOString()} className={clsx('px-3 py-3 border-r border-border-subtle last:border-r-0', isToday(day) && 'bg-accent-blue/5')}>
-              <p className={clsx('text-xs font-medium mb-0.5', isToday(day) ? 'text-accent-blue' : 'text-text-muted')}>
+            <div key={day.toISOString()} className={clsx('px-3 py-3 border-r border-border-subtle last:border-r-0 relative', isToday(day) && 'bg-accent-blue/5', selected && 'bg-accent-blue/10')}>
+              <p className={clsx('text-xs font-medium mb-0.5', isToday(day) || selected ? 'text-accent-blue' : 'text-text-muted')}>
                 {format(day, 'EEE', { locale: nl })}
               </p>
-              <p className={clsx('text-lg font-semibold leading-none', isToday(day) ? 'text-accent-blue' : 'text-text-primary')}>
+              <p className={clsx('text-lg font-semibold leading-none', isToday(day) || selected ? 'text-accent-blue' : 'text-text-primary')}>
                 {format(day, 'd')}
               </p>
               {dayKm > 0 && <p className="text-xs text-text-muted mt-1">{dayKm} km</p>}
+              {selected && <div className="absolute top-2 right-2 w-4 h-4 bg-accent-blue rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
             </div>
           )
         })}
@@ -363,15 +534,20 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
       {/* Day content */}
       <div className="grid grid-cols-7 min-h-32">
         {days.map((day) => {
+          const dateStr = format(day, 'yyyy-MM-dd')
           const dayExpenses = expenses.filter((e) => isSameDay(parseISO(e.date), day))
+          const selected = selectedDates.has(dateStr)
           return (
             <div
               key={day.toISOString()}
-              onClick={() => onDayClick(format(day, 'yyyy-MM-dd'))}
-              className={clsx('border-r border-border-subtle last:border-r-0 p-2 space-y-1.5 cursor-pointer group/day', isToday(day) && 'bg-accent-blue/[0.03]')}
+              onClick={() => selectMode ? onDateToggle(dateStr) : onDayClick(dateStr)}
+              className={clsx(
+                'border-r border-border-subtle last:border-r-0 p-2 space-y-1.5 cursor-pointer group/day transition-colors',
+                isToday(day) && 'bg-accent-blue/[0.03]',
+                selected && 'bg-accent-blue/[0.06] ring-1 ring-inset ring-accent-blue/30',
+              )}
             >
               {dayExpenses.map((e) => {
-                const client = clients.find((c) => c.id === e.clientId)
                 const user = isAdmin ? users.find((u) => u.id === e.userId) : null
                 return (
                   <div key={e.id} className="bg-blue-500/10 border border-blue-500/20 rounded-md px-2 py-1.5 cursor-pointer hover:bg-blue-500/20 transition-colors" onClick={(ev) => { ev.stopPropagation(); onEdit(e) }}>
@@ -384,10 +560,11 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
                   </div>
                 )
               })}
-              {/* Add hint on hover */}
-              <div className="opacity-0 group-hover/day:opacity-100 transition-opacity flex items-center justify-center py-1">
-                <span className="text-xs text-text-muted flex items-center gap-1"><Plus size={10} /> Rit</span>
-              </div>
+              {!selectMode && (
+                <div className="opacity-0 group-hover/day:opacity-100 transition-opacity flex items-center justify-center py-1">
+                  <span className="text-xs text-text-muted flex items-center gap-1"><Plus size={10} /> Rit</span>
+                </div>
+              )}
             </div>
           )
         })}
@@ -398,7 +575,7 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
 
 // ─── Month view ───────────────────────────────────────────────────────────────
 
-function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick }: {
+function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick, selectMode, selectedDates, onDateToggle }: {
   expenses: TravelExpense[]
   range: DateRange
   clients: { id: string; companyName: string }[]
@@ -406,6 +583,9 @@ function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClic
   isAdmin: boolean
   onEdit: (e: TravelExpense) => void
   onDayClick: (date: string) => void
+  selectMode: boolean
+  selectedDates: Set<string>
+  onDateToggle: (date: string) => void
 }) {
   const monthStart = startOfMonth(range.start)
   const monthEnd = endOfMonth(range.start)
@@ -429,25 +609,33 @@ function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClic
         <div key={wi} className="grid grid-cols-7 border-b border-border-subtle last:border-b-0">
           {week.map((day) => {
             const inMonth = day >= monthStart && day <= monthEnd
+            const dateStr = format(day, 'yyyy-MM-dd')
             const dayExpenses = expenses.filter((e) => isSameDay(parseISO(e.date), day))
             const dayKm = dayExpenses.reduce((s, e) => s + totalKm(e), 0)
+            const selected = selectedDates.has(dateStr)
             return (
               <div
                 key={day.toISOString()}
-                onClick={() => inMonth && onDayClick(format(day, 'yyyy-MM-dd'))}
+                onClick={() => {
+                  if (!inMonth) return
+                  selectMode ? onDateToggle(dateStr) : onDayClick(dateStr)
+                }}
                 className={clsx(
-                  'min-h-20 p-2 border-r border-border-subtle last:border-r-0 group/day',
+                  'min-h-20 p-2 border-r border-border-subtle last:border-r-0 group/day transition-colors',
                   inMonth ? 'cursor-pointer' : 'opacity-30',
-                  isToday(day) && 'bg-accent-blue/[0.04]'
+                  isToday(day) && 'bg-accent-blue/[0.04]',
+                  selected && 'bg-accent-blue/[0.08] ring-1 ring-inset ring-accent-blue/30',
                 )}
               >
-                <p className={clsx('text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full',
-                  isToday(day) ? 'bg-accent-blue text-white' : 'text-text-muted'
-                )}>
-                  {format(day, 'd')}
-                </p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className={clsx('text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full',
+                    selected ? 'bg-accent-blue text-white' : isToday(day) ? 'bg-accent-blue text-white' : 'text-text-muted'
+                  )}>
+                    {format(day, 'd')}
+                  </p>
+                  {selected && !isToday(day) && <Check size={11} className="text-accent-blue flex-shrink-0" />}
+                </div>
                 {dayExpenses.map((e) => {
-                  const client = clients.find((c) => c.id === e.clientId)
                   const user = isAdmin ? users.find((u) => u.id === e.userId) : null
                   return (
                     <div key={e.id} onClick={(ev) => { ev.stopPropagation(); onEdit(e) }} className="bg-blue-500/10 border border-blue-500/20 rounded px-1.5 py-1 mb-1 cursor-pointer hover:bg-blue-500/20 transition-colors">
@@ -462,7 +650,7 @@ function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClic
                 {dayKm > 0 && dayExpenses.length > 1 && (
                   <p className="text-xs text-text-muted mt-0.5">{fmt(dayExpenses.reduce((s, e) => s + amount(e), 0))}</p>
                 )}
-                {inMonth && (
+                {inMonth && !selectMode && (
                   <div className="opacity-0 group-hover/day:opacity-100 transition-opacity flex items-center justify-center py-0.5 mt-0.5">
                     <span className="text-xs text-text-muted flex items-center gap-1"><Plus size={10} /> Rit</span>
                   </div>
@@ -511,6 +699,24 @@ export function TravelExpenses() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const presetsRef = useRef<HTMLDivElement>(null)
   const exportRef = useRef<HTMLDivElement>(null)
+
+  // Multi-date select
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
+  const [showBulk, setShowBulk] = useState(false)
+
+  function toggleDate(date: string) {
+    setSelectedDates((prev) => {
+      const next = new Set(prev)
+      next.has(date) ? next.delete(date) : next.add(date)
+      return next
+    })
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedDates(new Set())
+  }
 
   // Admin: user selector
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -591,42 +797,46 @@ export function TravelExpenses() {
     : format(range.start, 'MMMM yyyy', { locale: nl })
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold text-text-primary">Reiskosten</h1>
-        <div className="flex items-center gap-2">
-          {/* Export dropdown */}
-          <div className="relative" ref={exportRef}>
+    <div>
+      <PageHeader
+        title="Reiskosten"
+        subtitle={rangeLabel}
+        actions={
+          <>
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setShowExport((v) => !v)}
+                disabled={filtered.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-1 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed text-sm rounded-lg transition-colors"
+              >
+                <Download size={14} /> Exporteren <ChevronDown size={12} />
+              </button>
+              {showExport && (
+                <div className="absolute right-0 top-full mt-1 bg-surface-1 border border-border-subtle rounded-xl shadow-xl z-30 py-1 min-w-[160px]">
+                  <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                    <Sheet size={14} className="text-green-400" /> CSV exporteren
+                  </button>
+                  <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                    <FileText size={14} className="text-red-400" /> PDF exporteren
+                  </button>
+                </div>
+              )}
+            </div>
             <button
-              onClick={() => setShowExport((v) => !v)}
-              disabled={filtered.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 bg-surface-1 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed text-sm rounded-lg transition-colors"
+              onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
+              className={clsx('flex items-center gap-1.5 px-3 py-1.5 border text-sm font-medium rounded-lg transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-1 border-border-subtle text-text-secondary hover:text-text-primary')}
             >
-              <Download size={14} /> Exporteren <ChevronDown size={12} />
+              <CalendarDays size={14} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
             </button>
-            {showExport && (
-              <div className="absolute right-0 top-full mt-1 bg-surface-1 border border-border-subtle rounded-xl shadow-xl z-20 py-1 min-w-[160px]">
-                <button
-                  onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors"
-                >
-                  <Sheet size={14} className="text-green-400" /> CSV exporteren
-                </button>
-                <button
-                  onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors"
-                >
-                  <FileText size={14} className="text-red-400" /> PDF exporteren
-                </button>
-              </div>
+            {!selectMode && (
+              <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+                <Plus size={14} /> Rit toevoegen
+              </button>
             )}
-          </div>
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-            <Plus size={14} /> Rit toevoegen
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
+      <div className="p-6 max-w-5xl mx-auto">
 
       {/* Admin: user selector */}
       {isAdmin && (
@@ -742,9 +952,9 @@ export function TravelExpenses() {
       {loading ? (
         <div className="flex justify-center py-16"><div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" /></div>
       ) : viewMode === 'week' ? (
-        <WeekView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} />
+        <WeekView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} selectMode={selectMode} selectedDates={selectedDates} onDateToggle={toggleDate} />
       ) : (
-        <MonthView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} />
+        <MonthView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} selectMode={selectMode} selectedDates={selectedDates} onDateToggle={toggleDate} />
       )}
 
       {/* Lijst onder kalender */}
@@ -789,9 +999,29 @@ export function TravelExpenses() {
         </div>
       )}
 
+      {/* Floating bulk bar */}
+      {selectMode && selectedDates.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl px-4 py-3">
+          <span className="text-sm text-text-primary font-medium">{selectedDates.size} datum{selectedDates.size !== 1 ? 's' : ''} geselecteerd</span>
+          <div className="w-px h-5 bg-border-subtle" />
+          <button onClick={() => setSelectedDates(new Set())} className="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
+            <X size={12} /> Deselecteer
+          </button>
+          <button
+            onClick={() => setShowBulk(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            <Plus size={14} /> Rit toevoegen voor alle
+          </button>
+        </div>
+      )}
+
       {/* Modals */}
       {(showAdd || editExpense) && (
         <ExpenseModal expense={editExpense} initialDate={addDate} onClose={() => { setShowAdd(false); setEditExpense(undefined); setAddDate(undefined) }} onSaved={load} onDelete={(id) => { handleDelete(id); setEditExpense(undefined); setShowAdd(false) }} />
+      )}
+      {showBulk && (
+        <BulkExpenseModal dates={[...selectedDates]} onClose={() => setShowBulk(false)} onSaved={() => { load(); exitSelectMode() }} />
       )}
       {deleteId && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -805,6 +1035,7 @@ export function TravelExpenses() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
