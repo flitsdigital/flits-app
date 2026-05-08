@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Plus, Search, Users } from 'lucide-react'
 import { parseISO, differenceInDays, startOfDay } from 'date-fns'
 import { useStore } from '../store/useStore'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceStatus, formatWeek, formatWeekDate, formatCycle } from '../lib/billing'
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
@@ -13,6 +14,7 @@ type SortKey = 'companyName' | 'nextInvoiceDate' | 'pricePerCycle' | 'status'
 type Filter = 'all' | 'active' | 'paused' | 'inactive'
 
 export function Clients() {
+  usePageMeta('Klanten → Flits Impact', 'Beheer je klanten, contracten en facturatie.')
   const { clients, addClient } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')

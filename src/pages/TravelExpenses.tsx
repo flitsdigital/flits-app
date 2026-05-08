@@ -11,6 +11,7 @@ import { nl } from 'date-fns/locale'
 import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet } from 'lucide-react'
 import { supabase, supabaseAdmin } from '../lib/supabase'
 import { useStore } from '../store/useStore'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
 import type { TravelExpense, UserProfile } from '../types'
 import clsx from 'clsx'
@@ -490,6 +491,7 @@ function fromRow(row: DbRow): TravelExpense {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function TravelExpenses() {
+  usePageMeta('Reiskosten → Flits Impact', 'Registreer en exporteer reiskosten per week of maand.')
   const clients = useStore((s) => s.clients)
   const profile = useAuthStore((s) => s.profile)
   const isAdmin = profile?.role === 'admin'

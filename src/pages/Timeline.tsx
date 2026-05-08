@@ -16,6 +16,7 @@ import {
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceTimeline, getInvoiceStatus, formatWeek, formatWeekDate } from '../lib/billing'
 import type { Client } from '../types'
 
@@ -78,6 +79,7 @@ interface TooltipData {
 }
 
 export function Timeline() {
+  usePageMeta('Timeline → Flits Impact', 'Tijdlijn van alle klantactiviteiten en mijlpalen.')
   const clients = useStore((s) => s.clients)
   const toggleInvoiced = useStore((s) => s.toggleInvoiced)
   const navigate = useNavigate()

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { Navigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, X, Check, Shield, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -286,6 +287,7 @@ function DeleteConfirm({
 // ─── Settings page ────────────────────────────────────────────────────────────
 
 export function Settings() {
+  usePageMeta('Instellingen → Flits Impact', 'Beheer gebruikers, rollen en toegangsrechten.')
   const { profile, signOut, refreshProfile } = useAuthStore()
   const isAdmin = profile?.role === 'admin'
 

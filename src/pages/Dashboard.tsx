@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Users, TrendingUp, AlertCircle, Clock, UserMinus, ArrowRight, Calendar } from 'lucide-react'
 import { parseISO, differenceInDays, startOfDay, format } from 'date-fns'
 import { useStore } from '../store/useStore'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceStatus, formatWeek, formatWeekDate, formatCycle, calcMonthlyRevenue } from '../lib/billing'
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
@@ -35,6 +36,7 @@ function KpiCard({
 }
 
 export function Dashboard() {
+  usePageMeta('Dashboard → Flits Impact', 'Overzicht van klanten, facturen en aankomende acties.')
   const clients = useStore((s) => s.clients)
 
   const stats = useMemo(() => {

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { usePageMeta } from '../hooks/usePageMeta'
 import {
   startOfMonth,
   endOfMonth,
@@ -343,6 +344,7 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
 }
 
 export function Content() {
+  usePageMeta('Content → Flits Impact', 'Plan en beheer social media content voor al je klanten.')
   const { posts, clients, addPost, updatePost, deletePost } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -355,6 +357,8 @@ export function Content() {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
   const clientColorMap = useMemo(() => {
     const map: Record<string, ReturnType<typeof clientColor>> = {};
@@ -488,14 +492,30 @@ export function Content() {
     const sc = postStatusChipColor[post.status] ?? postStatusChipColor['todo'];
     const Icon = TYPE_ICON[post.type];
     const clientName = clientMap[post.clientId] ?? "?";
+    const isDragging = draggingPostId === post.id;
     return (
       <div
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData('postId', post.id);
+          e.dataTransfer.effectAllowed = 'move';
+          // Defer zodat de browser de drag initialiseert vóór de re-render
+          const id = post.id;
+          window.setTimeout(() => setDraggingPostId(id), 0);
+        }}
+        onDragEnd={() => {
+          setDraggingPostId(null);
+          setDragOverDate(null);
+        }}
         onClick={(e) => {
           e.stopPropagation();
-          setEditingPost(post);
-          setPostFormOpen(true);
+          if (!isDragging) {
+            setEditingPost(post);
+            setPostFormOpen(true);
+          }
         }}
-        className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity border ${sc.bg} ${sc.text} ${sc.border}`}
+        className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs border transition-opacity cursor-grab active:cursor-grabbing ${sc.bg} ${sc.text} ${sc.border} ${isDragging ? 'opacity-30' : 'hover:opacity-80'}`}
       >
         <Icon size={10} className="shrink-0 opacity-70" />
         <span className="truncate font-medium">{clientName}</span>
@@ -712,11 +732,39 @@ export function Content() {
               const dayPostList = postsForDay(day);
               const inMonth = isSameMonth(day, currentDate);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const isDragTarget = draggingPostId && dragOverDate === dateStr;
               return (
                 <div
                   key={i}
-                  onClick={() => setSelectedDay(isSelected ? null : day)}
-                  className={`min-h-[108px] p-2 border-r border-b border-border-subtle/40 cursor-pointer transition-colors ${isSelected ? "bg-accent-blue/5 ring-1 ring-inset ring-accent-blue/20" : "hover:bg-white/[0.02]"} ${!inMonth ? "opacity-30" : ""}`}
+                  onClick={() => !draggingPostId && setSelectedDay(isSelected ? null : day)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    setDragOverDate(dateStr);
+                  }}
+                  onDragLeave={(e) => {
+                    // Alleen clearen als we echt de cel verlaten (niet naar een kind-element)
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setDragOverDate(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const postId = e.dataTransfer.getData('postId') || draggingPostId;
+                    if (postId) {
+                      updatePost(postId, { date: dateStr });
+                    }
+                    setDraggingPostId(null);
+                    setDragOverDate(null);
+                  }}
+                  className={`min-h-[108px] p-2 border-r border-b border-border-subtle/40 transition-colors
+                    ${isDragTarget ? 'bg-accent-blue/10 ring-1 ring-inset ring-accent-blue/40' : ''}
+                    ${isSelected && !draggingPostId ? 'bg-accent-blue/5 ring-1 ring-inset ring-accent-blue/20' : ''}
+                    ${!isDragTarget && !isSelected ? 'hover:bg-white/[0.02]' : ''}
+                    ${!inMonth ? 'opacity-30' : ''}
+                    ${draggingPostId ? 'cursor-copy' : 'cursor-pointer'}
+                  `}
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span

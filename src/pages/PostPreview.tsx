@@ -67,6 +67,25 @@ export function PostPreview() {
     return format(parseISO(post.date), 'd MMMM yyyy', { locale: nl })
   }, [post?.date])
 
+  // Dynamische meta title + description zodra data geladen is
+  useEffect(() => {
+    if (!post || loading) return
+    const datePart = dateLabel ?? 'onbekende datum'
+    document.title = `${clientName} — ${datePart}`
+
+    let metaDesc = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta')
+      metaDesc.name = 'description'
+      document.head.appendChild(metaDesc)
+    }
+    metaDesc.content = `Preview van post ${datePart} voor ${clientName} | Flits Digital`
+
+    return () => {
+      document.title = 'Flits Impact'
+    }
+  }, [post, clientName, dateLabel, loading])
+
   const mediaUrls = useMemo(() => {
     if (!post) return []
     if (post.media_urls && post.media_urls.length > 0) return post.media_urls

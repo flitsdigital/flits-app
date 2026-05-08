@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/useAuthStore'
 
 export function Login() {
@@ -60,9 +60,14 @@ export function Login() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
-                Wachtwoord
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-text-secondary">
+                  Wachtwoord
+                </label>
+                <Link to="/forgot-password" className="text-xs text-text-muted hover:text-accent-blue transition-colors">
+                  Vergeten?
+                </Link>
+              </div>
               <input
                 type="password"
                 value={password}

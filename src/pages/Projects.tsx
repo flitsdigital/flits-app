@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabaseAdmin } from '../lib/supabase'
 import { useStore } from '../store/useStore'
+import { usePageMeta } from '../hooks/usePageMeta'
 import clsx from 'clsx'
 import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus } from '../types'
 
@@ -1069,6 +1070,7 @@ function ProjectCard({ project, clientName, taskCount, onClick, onEdit }: {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function Projects() {
+  usePageMeta('Projecten → Flits Impact', 'Beheer projecten en taken per klant in kanban of lijstweergave.')
   const clients = useStore(s => s.clients)
 
   const [projects, setProjects] = useState<Project[]>([])

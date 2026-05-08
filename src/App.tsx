@@ -9,6 +9,8 @@ import { Timeline } from './pages/Timeline'
 import { Content } from './pages/Content'
 import { PostPreview } from './pages/PostPreview'
 import { Login } from './pages/Login'
+import { ForgotPassword } from './pages/ForgotPassword'
+import { ResetPassword } from './pages/ResetPassword'
 import { Settings } from './pages/Settings'
 import { TravelExpenses } from './pages/TravelExpenses'
 import { Projects } from './pages/Projects'
@@ -32,6 +34,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="preview/:postId" element={<PostPreview />} />
 
         {/* Protected shell */}
