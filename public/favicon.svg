@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#FFE600"/>
-  <polygon points="19,3 10,18 16,18 13,29 22,14 16,14" fill="#111111"/>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="32" height="32" rx="6" fill="#FFF301"/>
+<path d="M22 14.4955C22 14.4955 19.8392 18.9317 18.4843 25H13.9641L15.1554 18.5155H9C9 18.5155 11.1491 14.0793 12.5157 8H17.0359L15.8446 14.4955H22Z" fill="#140218"/>
 </svg>

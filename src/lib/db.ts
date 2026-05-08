@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, withTimeout } from './supabase'
 import type { Client, InvoiceRecord, Post, PostType, PostStatus, PostLog, PostLogAction } from '../types'
 import { enrichClient } from './billing'
 
@@ -80,24 +80,23 @@ export const db = {
   },
 
   async upsert(client: Client): Promise<void> {
-    const { error } = await supabase
-      .from('clients')
-      .upsert(toRow(client))
+    const { error } = await withTimeout(
+      supabase.from('clients').upsert(toRow(client))
+    )
     if (error) throw error
   },
 
   async upsertMany(clients: Client[]): Promise<void> {
-    const { error } = await supabase
-      .from('clients')
-      .upsert(clients.map(toRow))
+    const { error } = await withTimeout(
+      supabase.from('clients').upsert(clients.map(toRow))
+    )
     if (error) throw error
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('clients').delete().eq('id', id)
+    )
     if (error) throw error
   },
 }
@@ -170,18 +169,24 @@ export const postDb = {
   },
 
   async upsert(post: Post): Promise<void> {
-    const { error } = await supabase.from('posts').upsert(postToRow(post))
+    const { error } = await withTimeout(
+      supabase.from('posts').upsert(postToRow(post))
+    )
     if (error) throw error
   },
 
   async upsertMany(posts: Post[]): Promise<void> {
     if (posts.length === 0) return
-    const { error } = await supabase.from('posts').upsert(posts.map(postToRow))
+    const { error } = await withTimeout(
+      supabase.from('posts').upsert(posts.map(postToRow))
+    )
     if (error) throw error
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase.from('posts').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('posts').delete().eq('id', id)
+    )
     if (error) throw error
   },
 }
@@ -226,13 +231,15 @@ export const postLogDb = {
     actorId?: string
     metadata?: PostLog['metadata']
   }): Promise<void> {
-    const { error } = await supabase.from('post_logs').insert({
-      post_id: input.postId,
-      action: input.action,
-      actor_email: input.actorEmail ?? null,
-      actor_id: input.actorId ?? null,
-      metadata: input.metadata ?? null,
-    })
+    const { error } = await withTimeout(
+      supabase.from('post_logs').insert({
+        post_id: input.postId,
+        action: input.action,
+        actor_email: input.actorEmail ?? null,
+        actor_id: input.actorId ?? null,
+        metadata: input.metadata ?? null,
+      })
+    )
     if (error) throw error
   },
 
@@ -244,14 +251,16 @@ export const postLogDb = {
     metadata?: PostLog['metadata']
   }[]): Promise<void> {
     if (inputs.length === 0) return
-    const { error } = await supabase.from('post_logs').insert(
-      inputs.map((input) => ({
-        post_id: input.postId,
-        action: input.action,
-        actor_email: input.actorEmail ?? null,
-        actor_id: input.actorId ?? null,
-        metadata: input.metadata ?? null,
-      }))
+    const { error } = await withTimeout(
+      supabase.from('post_logs').insert(
+        inputs.map((input) => ({
+          post_id: input.postId,
+          action: input.action,
+          actor_email: input.actorEmail ?? null,
+          actor_id: input.actorId ?? null,
+          metadata: input.metadata ?? null,
+        }))
+      )
     )
     if (error) throw error
   },

@@ -9,7 +9,7 @@ import {
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check } from 'lucide-react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase, supabaseAdmin, withTimeout } from '../lib/supabase'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
@@ -200,10 +200,14 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
     const row = { client_id: clientId || null, date, from_location: from, to_location: to, return_trip: returnTrip, kilometers: km, updated_at: new Date().toISOString() }
     try {
       if (isEdit) {
-        const { error } = await supabase.from('travel_expenses').update(row).eq('id', expense!.id)
+        const { error } = await withTimeout(
+          supabase.from('travel_expenses').update(row).eq('id', expense!.id)
+        )
         if (error) throw error
       } else {
-        const { error } = await supabase.from('travel_expenses').insert({ ...row, id: Math.random().toString(36).slice(2, 10), user_id: session?.user.id, created_at: new Date().toISOString() })
+        const { error } = await withTimeout(
+          supabase.from('travel_expenses').insert({ ...row, id: Math.random().toString(36).slice(2, 10), user_id: session?.user.id, created_at: new Date().toISOString() })
+        )
         if (error) throw error
       }
       onSaved(); onClose()
@@ -374,7 +378,9 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
       updated_at: now,
     }))
     try {
-      const { error: err } = await supabase.from('travel_expenses').insert(rows)
+      const { error: err } = await withTimeout(
+        supabase.from('travel_expenses').insert(rows)
+      )
       if (err) throw err
       onSaved(); onClose()
     } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)) }
@@ -730,17 +736,22 @@ export function TravelExpenses() {
 
   async function load() {
     setLoading(true)
-    let query = isAdmin
-      ? supabaseAdmin.from('travel_expenses').select('*').order('date', { ascending: false })
-      : supabase.from('travel_expenses').select('*').order('date', { ascending: false })
+    try {
+      let query = isAdmin
+        ? supabaseAdmin.from('travel_expenses').select('*').order('date', { ascending: false })
+        : supabase.from('travel_expenses').select('*').order('date', { ascending: false })
 
-    if (isAdmin && selectedUserId !== 'all') {
-      query = query.eq('user_id', selectedUserId)
+      if (isAdmin && selectedUserId !== 'all') {
+        query = query.eq('user_id', selectedUserId)
+      }
+
+      const { data } = await withTimeout(query, 15_000)
+      setExpenses((data as DbRow[] ?? []).map(fromRow))
+    } catch {
+      // Toon lege lijst bij timeout / netwerk fout — user ziet het via de lege state
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query
-    setExpenses((data as DbRow[] ?? []).map(fromRow))
-    setLoading(false)
   }
 
   useEffect(() => { load() }, [selectedUserId])
@@ -762,7 +773,7 @@ export function TravelExpenses() {
 
   async function handleDelete(id: string) {
     const client = isAdmin ? supabaseAdmin : supabase
-    await client.from('travel_expenses').delete().eq('id', id)
+    await withTimeout(client.from('travel_expenses').delete().eq('id', id))
     setDeleteId(null); load()
   }
 
