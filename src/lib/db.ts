@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Client, InvoiceRecord, Post, PostType, PostStatus } from '../types'
+import type { Client, InvoiceRecord, Post, PostType, PostStatus, PostLog, PostLogAction } from '../types'
 import { enrichClient } from './billing'
 
 interface DbRow {
@@ -174,8 +174,85 @@ export const postDb = {
     if (error) throw error
   },
 
+  async upsertMany(posts: Post[]): Promise<void> {
+    if (posts.length === 0) return
+    const { error } = await supabase.from('posts').upsert(posts.map(postToRow))
+    if (error) throw error
+  },
+
   async delete(id: string): Promise<void> {
     const { error } = await supabase.from('posts').delete().eq('id', id)
+    if (error) throw error
+  },
+}
+
+interface DbPostLog {
+  id: string
+  post_id: string
+  action: string
+  actor_email: string | null
+  actor_id: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+function postLogFromRow(row: DbPostLog): PostLog {
+  return {
+    id: row.id,
+    postId: row.post_id,
+    action: row.action as PostLogAction,
+    actorEmail: row.actor_email ?? undefined,
+    actorId: row.actor_id ?? undefined,
+    metadata: (row.metadata as PostLog['metadata']) ?? undefined,
+    createdAt: row.created_at,
+  }
+}
+
+export const postLogDb = {
+  async fetchForPost(postId: string): Promise<PostLog[]> {
+    const { data, error } = await supabase
+      .from('post_logs')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data as DbPostLog[]).map(postLogFromRow)
+  },
+
+  async add(input: {
+    postId: string
+    action: PostLogAction
+    actorEmail?: string
+    actorId?: string
+    metadata?: PostLog['metadata']
+  }): Promise<void> {
+    const { error } = await supabase.from('post_logs').insert({
+      post_id: input.postId,
+      action: input.action,
+      actor_email: input.actorEmail ?? null,
+      actor_id: input.actorId ?? null,
+      metadata: input.metadata ?? null,
+    })
+    if (error) throw error
+  },
+
+  async addMany(inputs: {
+    postId: string
+    action: PostLogAction
+    actorEmail?: string
+    actorId?: string
+    metadata?: PostLog['metadata']
+  }[]): Promise<void> {
+    if (inputs.length === 0) return
+    const { error } = await supabase.from('post_logs').insert(
+      inputs.map((input) => ({
+        post_id: input.postId,
+        action: input.action,
+        actor_email: input.actorEmail ?? null,
+        actor_id: input.actorId ?? null,
+        metadata: input.metadata ?? null,
+      }))
+    )
     if (error) throw error
   },
 }

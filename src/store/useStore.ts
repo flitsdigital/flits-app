@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import type { Client, InvoiceRecord, Post } from '../types'
+import type { Client, InvoiceRecord, Post, PostLog } from '../types'
 import { enrichClient } from '../lib/billing'
-import { db, postDb } from '../lib/db'
+import { db, postDb, postLogDb } from '../lib/db'
+import { useAuthStore } from './useAuthStore'
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -31,7 +32,8 @@ interface StoreState {
   deleteClient: (id: string) => Promise<void>
   getClient: (id: string) => Client | undefined
   toggleInvoiced: (clientId: string, date: string) => Promise<void>
-  addPost: (data: PostInput) => Promise<void>
+  addPost: (data: PostInput) => Promise<Post>
+  addPostsBulk: (posts: PostInput[]) => Promise<Post[]>
   updatePost: (id: string, data: Partial<Post>) => Promise<void>
   deletePost: (id: string) => Promise<void>
 }
@@ -94,6 +96,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   getClient: (id) => get().clients.find((c) => c.id === id),
 
   addPost: async (data) => {
+    const actor = useAuthStore.getState().session?.user
     const post: Post = {
       ...data,
       id: generateId(),
@@ -102,9 +105,45 @@ export const useStore = create<StoreState>()((set, get) => ({
     }
     set((s) => ({ posts: [post, ...s.posts] }))
     await postDb.upsert(post)
+    await postLogDb.add({
+      postId: post.id,
+      action: 'created',
+      actorEmail: actor?.email ?? undefined,
+      actorId: actor?.id ?? undefined,
+      metadata: { toStatus: post.status },
+    })
+    return post
+  },
+
+  addPostsBulk: async (postsInput) => {
+    const actor = useAuthStore.getState().session?.user
+    const now = new Date().toISOString()
+    const posts: Post[] = postsInput.map((data) => ({
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }))
+    // Optimistic update — add all at once
+    set((s) => ({ posts: [...posts, ...s.posts] }))
+    // Single batch insert for posts
+    await postDb.upsertMany(posts)
+    // Single batch insert for logs
+    await postLogDb.addMany(
+      posts.map((post) => ({
+        postId: post.id,
+        action: 'created' as const,
+        actorEmail: actor?.email ?? undefined,
+        actorId: actor?.id ?? undefined,
+        metadata: { toStatus: post.status },
+      }))
+    )
+    return posts
   },
 
   updatePost: async (id, data) => {
+    const before = get().posts.find((p) => p.id === id)
+    const actor = useAuthStore.getState().session?.user
     set((s) => ({
       posts: s.posts.map((p) =>
         p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p
@@ -112,9 +151,64 @@ export const useStore = create<StoreState>()((set, get) => ({
     }))
     const updated = get().posts.find((p) => p.id === id)
     if (updated) await postDb.upsert(updated)
+    if (before && updated) {
+      const mediaBefore = JSON.stringify(before.mediaUrls ?? (before.mediaUrl ? [before.mediaUrl] : []))
+      const mediaAfter = JSON.stringify(updated.mediaUrls ?? (updated.mediaUrl ? [updated.mediaUrl] : []))
+      const changes: NonNullable<PostLog['metadata']>['changes'] = []
+
+      if (before.clientId !== updated.clientId) {
+        changes.push({ field: 'clientId', from: before.clientId, to: updated.clientId })
+      }
+      if (before.type !== updated.type) {
+        changes.push({ field: 'type', from: before.type, to: updated.type })
+      }
+      if (before.status !== updated.status) {
+        changes.push({ field: 'status', from: before.status, to: updated.status })
+      }
+      if (before.caption !== updated.caption) {
+        changes.push({ field: 'caption', from: before.caption ?? '', to: updated.caption ?? '' })
+      }
+      if ((before.date ?? '') !== (updated.date ?? '')) {
+        changes.push({ field: 'date', from: before.date ?? '', to: updated.date ?? '' })
+      }
+      if (mediaBefore !== mediaAfter) {
+        changes.push({ field: 'mediaUrls', from: mediaBefore, to: mediaAfter })
+      }
+
+      if (changes.length === 0) return
+
+      if (changes.length === 1 && changes[0].field === 'status') {
+        await postLogDb.add({
+          postId: id,
+          action: 'status_changed',
+          actorEmail: actor?.email ?? undefined,
+          actorId: actor?.id ?? undefined,
+          metadata: {
+            fromStatus: before.status,
+            toStatus: updated.status,
+            changes,
+          },
+        })
+      } else {
+        await postLogDb.add({
+          postId: id,
+          action: 'updated',
+          actorEmail: actor?.email ?? undefined,
+          actorId: actor?.id ?? undefined,
+          metadata: { changes },
+        })
+      }
+    }
   },
 
   deletePost: async (id) => {
+    const actor = useAuthStore.getState().session?.user
+    await postLogDb.add({
+      postId: id,
+      action: 'deleted',
+      actorEmail: actor?.email ?? undefined,
+      actorId: actor?.id ?? undefined,
+    })
     set((s) => ({ posts: s.posts.filter((p) => p.id !== id) }))
     await postDb.delete(id)
   },

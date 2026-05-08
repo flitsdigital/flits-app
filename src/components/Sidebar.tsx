@@ -4,8 +4,10 @@ import {
   Users,
   GanttChart,
   CalendarDays,
+  Car,
   Settings,
   LogOut,
+  Kanban,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from '../store/useAuthStore'
@@ -16,6 +18,8 @@ const ALL_NAV: { to: string; label: string; icon: React.ElementType; exact: bool
   { to: '/clients', label: 'Klanten', icon: Users, exact: false, page: 'clients' },
   { to: '/timeline', label: 'Timeline', icon: GanttChart, exact: false, page: 'timeline' },
   { to: '/content', label: 'Content', icon: CalendarDays, exact: false, page: 'content' },
+  { to: '/reiskosten', label: 'Reiskosten', icon: Car, exact: false, page: 'reiskosten' },
+  { to: '/projects',   label: 'Projecten',  icon: Kanban, exact: false, page: 'projects' },
 ]
 
 export function Sidebar() {
@@ -28,14 +32,14 @@ export function Sidebar() {
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-border-subtle">
+      <div className="px-4 py-[13px] border-b border-border-subtle">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-accent-blue flex items-center justify-center">
+          <div className="w-6 h-6 rounded-md bg-accent-blue flex items-center justify-center shrink-0">
             <span className="text-white text-xs font-bold">A</span>
           </div>
           <div>
             <p className="text-sm font-semibold text-text-primary leading-none">Agency CRM</p>
-            <p className="text-xs text-text-muted mt-0.5">Social Media</p>
+            <p className="text-[11px] text-text-muted mt-0.5">Social Media</p>
           </div>
         </div>
       </div>

@@ -10,6 +10,8 @@ import { Content } from './pages/Content'
 import { PostPreview } from './pages/PostPreview'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
+import { TravelExpenses } from './pages/TravelExpenses'
+import { Projects } from './pages/Projects'
 import { useAuthStore } from './store/useAuthStore'
 import { useStore } from './store/useStore'
 
@@ -52,6 +54,14 @@ export default function App() {
 
             <Route element={<ProtectedRoute page="content" />}>
               <Route path="content" element={<Content />} />
+            </Route>
+
+            <Route element={<ProtectedRoute page="reiskosten" />}>
+              <Route path="reiskosten" element={<TravelExpenses />} />
+            </Route>
+
+            <Route element={<ProtectedRoute page="projects" />}>
+              <Route path="projects" element={<Projects />} />
             </Route>
 
             {/* Settings: admin only */}

@@ -563,13 +563,19 @@ export function ClientDetail() {
           setPostFormOpen(false);
           setEditingPost(null);
         }}
-        onSave={(data) => {
+        onSave={async (data) => {
           if (editingPost) {
-            updatePost(editingPost.id, data);
+            await updatePost(editingPost.id, data);
           } else {
-            addPost(data);
+            const created = await addPost(data);
+            setEditingPost(created);
           }
         }}
+        onDelete={editingPost ? async () => {
+          await deletePost(editingPost.id);
+          setPostFormOpen(false);
+          setEditingPost(null);
+        } : undefined}
         initial={editingPost ?? undefined}
         clientId={client.id}
         clients={[client]}

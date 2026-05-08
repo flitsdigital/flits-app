@@ -1,5 +1,18 @@
 export type UserRole = 'admin' | 'default'
-export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content'
+export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects'
+
+export interface TravelExpense {
+  id: string
+  userId: string
+  clientId: string
+  date: string
+  from: string
+  to: string
+  returnTrip: boolean
+  kilometers: number
+  createdAt: string
+  updatedAt: string
+}
 
 export interface UserProfile {
   id: string
@@ -46,7 +59,27 @@ export interface Client {
 }
 
 export type PostType = 'foto' | 'video' | 'reel' | 'story' | 'carousel'
-export type PostStatus = 'todo' | 'planned' | 'posted'
+export type PostStatus = 'todo' | 'in_progress' | 'feedback' | 'posted'
+export type PostLogAction = 'created' | 'status_changed' | 'updated' | 'deleted'
+
+export interface PostLog {
+  id: string
+  postId: string
+  action: PostLogAction
+  actorEmail?: string
+  actorId?: string
+  createdAt: string
+  metadata?: {
+    fromStatus?: PostStatus
+    toStatus?: PostStatus
+    note?: string
+    changes?: Array<{
+      field: 'clientId' | 'type' | 'status' | 'caption' | 'date' | 'mediaUrls'
+      from: string
+      to: string
+    }>
+  }
+}
 
 export interface Post {
   id: string
@@ -57,6 +90,47 @@ export interface Post {
   mediaUrl?: string
   mediaUrls?: string[]
   date?: string // 'yyyy-MM-dd'
+  createdAt: string
+  updatedAt: string
+}
+
+// ── Project Management ────────────────────────────────────────────────────────
+
+export type ProjectStatus = 'active' | 'paused' | 'completed'
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+
+export interface Project {
+  id: string
+  clientId: string
+  name: string
+  description?: string | null
+  status: ProjectStatus
+  color: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Task {
+  id: string
+  projectId: string
+  title: string
+  description?: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  assigneeId?: string | null
+  dueDate?: string | null
+  position: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Subtask {
+  id: string
+  taskId: string
+  title: string
+  done: boolean
+  position: number
   createdAt: string
   updatedAt: string
 }

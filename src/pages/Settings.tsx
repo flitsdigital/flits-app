@@ -12,6 +12,8 @@ const PAGE_OPTIONS: { id: AppPage; label: string }[] = [
   { id: 'clients', label: 'Klanten' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'content', label: 'Content' },
+  { id: 'reiskosten', label: 'Reiskosten' },
+  { id: 'projects', label: 'Projecten' },
 ]
 
 // ─── User modal ───────────────────────────────────────────────────────────────

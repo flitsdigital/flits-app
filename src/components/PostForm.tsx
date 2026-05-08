@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { X, Image, Video, Film, Square, Layers, Upload, Loader2, ExternalLink, GripVertical, Share2, Check } from 'lucide-react'
+import { X, Image, Video, Film, Square, Layers, Upload, Loader2, ExternalLink, GripVertical, Share2, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
-import type { Post, PostType, PostStatus, Client } from '../types'
+import type { Post, PostType, PostStatus, Client, PostLog } from '../types'
 import { supabase } from '../lib/supabase'
+import { postLogDb } from '../lib/db'
+import { format } from 'date-fns'
+import { nl } from 'date-fns/locale'
 
 type FormData = Omit<Post, 'id' | 'createdAt' | 'updatedAt'>
 
@@ -15,9 +18,10 @@ const POST_TYPES: { value: PostType; label: string; icon: React.ElementType }[] 
 ]
 
 const POST_STATUSES: { value: PostStatus; label: string; color: string }[] = [
-  { value: 'todo', label: 'Te doen', color: 'border-zinc-600 text-zinc-400 bg-zinc-800/50' },
-  { value: 'planned', label: 'Gepland', color: 'border-blue-500/40 text-blue-400 bg-blue-500/10' },
-  { value: 'posted', label: 'Gepost', color: 'border-green-500/40 text-green-400 bg-green-500/10' },
+  { value: 'todo',        label: 'Te doen',             color: 'border-zinc-600 text-zinc-400 bg-zinc-800/50' },
+  { value: 'in_progress', label: 'Bezig',                color: 'border-orange-500/40 text-orange-400 bg-orange-500/10' },
+  { value: 'feedback',    label: 'Klaar voor feedback',  color: 'border-blue-500/40 text-blue-400 bg-blue-500/10' },
+  { value: 'posted',      label: 'Gepost',               color: 'border-green-500/40 text-green-400 bg-green-500/10' },
 ]
 
 const inputCls = 'w-full bg-surface-3 border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/30 transition-colors'
@@ -26,6 +30,7 @@ interface Props {
   open: boolean
   onClose: () => void
   onSave: (data: FormData) => void | Promise<void>
+  onDelete?: () => void | Promise<void>
   initial?: Partial<Post>
   clientId: string
   clients?: Client[]
@@ -38,6 +43,7 @@ export function PostForm({
   open,
   onClose,
   onSave,
+  onDelete,
   initial,
   clientId,
   clients = [],
@@ -45,7 +51,6 @@ export function PostForm({
   sharePostId,
   title = 'Post toevoegen',
 }: Props) {
-  const baseDate = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState<FormData>({
     clientId,
     type: 'foto',
@@ -53,7 +58,7 @@ export function PostForm({
     caption: '',
     mediaUrl: '',
     mediaUrls: [],
-    date: baseDate,
+    date: new Date().toISOString().slice(0, 10),
     ...initial,
   })
   const [uploading, setUploading] = useState(false)
@@ -64,35 +69,71 @@ export function PostForm({
   const [savedState, setSavedState] = useState(false)
   const [initialSnapshot, setInitialSnapshot] = useState('')
   const captionRef = useRef<HTMLTextAreaElement | null>(null)
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [logs, setLogs] = useState<PostLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Snapshot refs zodat we bij het openen altijd de juiste waarden hebben
+  // zonder dat een nieuwe object-referentie van `initial` de effect opnieuw laat vuren
+  // terwijl de modal al open is (zou anders `uploading` resetten mid-upload).
+  const initialRef = useRef(initial)
+  const clientIdRef = useRef(clientId)
+  useEffect(() => { initialRef.current = initial }, [initial])
+  useEffect(() => { clientIdRef.current = clientId }, [clientId])
 
   useEffect(() => {
-    if (open) {
-      const nextForm: FormData = {
-        clientId,
-        type: 'foto',
-        status: 'todo',
-        caption: '',
-        mediaUrl: '',
-        mediaUrls: [],
-        date: baseDate,
-        ...initial,
-      }
-      if (!nextForm.mediaUrls || nextForm.mediaUrls.length === 0) {
-        nextForm.mediaUrls = nextForm.mediaUrl ? [nextForm.mediaUrl] : []
-      }
-      if (!nextForm.mediaUrl && nextForm.mediaUrls.length > 0) {
-        nextForm.mediaUrl = nextForm.mediaUrls[0]
-      }
-      setForm(nextForm)
-      setUploadError(null)
-      setUploading(false)
-      setSubmitLoading(false)
-      setDragIndex(null)
-      setCopied(false)
-      setSavedState(false)
-      setInitialSnapshot(JSON.stringify(normalizedForm(nextForm)))
+    if (!open) return
+    const baseDate = new Date().toISOString().slice(0, 10)
+    const nextForm: FormData = {
+      clientId: clientIdRef.current,
+      type: 'foto',
+      status: 'todo',
+      caption: '',
+      mediaUrl: '',
+      mediaUrls: [],
+      date: baseDate,
+      ...initialRef.current,
     }
-  }, [open, initial, clientId, baseDate])
+    if (!nextForm.mediaUrls || nextForm.mediaUrls.length === 0) {
+      nextForm.mediaUrls = nextForm.mediaUrl ? [nextForm.mediaUrl] : []
+    }
+    if (!nextForm.mediaUrl && nextForm.mediaUrls.length > 0) {
+      nextForm.mediaUrl = nextForm.mediaUrls[0]
+    }
+    setForm(nextForm)
+    setUploadError(null)
+    setUploading(false)
+    setSubmitLoading(false)
+    setDragIndex(null)
+    setCopied(false)
+    setSavedState(false)
+    setConfirmDelete(false)
+    setInitialSnapshot(JSON.stringify(normalizedForm(nextForm)))
+    setActivityOpen(false)
+  // Alleen resetten wanneer de modal opent — NIET bij elke prop-wijziging,
+  // want dat reset ook `uploading` terwijl een upload bezig is.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  useEffect(() => {
+    async function loadLogs() {
+      if (!open || !sharePostId) {
+        setLogs([])
+        return
+      }
+      setLogsLoading(true)
+      try {
+        const entries = await postLogDb.fetchForPost(sharePostId)
+        setLogs(entries)
+      } catch {
+        setLogs([])
+      } finally {
+        setLogsLoading(false)
+      }
+    }
+    loadLogs()
+  }, [open, sharePostId, savedState])
 
   const isDirty = useMemo(
     () => JSON.stringify(normalizedForm(form)) !== initialSnapshot,
@@ -114,19 +155,51 @@ export function PostForm({
 
   async function uploadImage(file: File) {
     const bucket = import.meta.env.VITE_SUPABASE_POST_MEDIA_BUCKET || 'post-media'
+    const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, '')
+    const anonKey   = import.meta.env.VITE_SUPABASE_ANON_KEY as string
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const fileName = `${form.clientId}/${crypto.randomUUID()}.${extension}`
+    const fileName  = `${form.clientId}/${crypto.randomUUID()}.${extension}`
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      })
-    if (uploadError) throw uploadError
+    // Haal sessie-token op (cached, geen network call)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token ?? anonKey
 
-    const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
-    return data.publicUrl
+    // Gebruik raw fetch + AbortController zodat de upload écht gecanceld kan worden
+    const controller = new AbortController()
+    const timeoutId  = window.setTimeout(() => controller.abort(), 30_000)
+
+    try {
+      const response = await fetch(
+        `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: anonKey,
+            'Content-Type': file.type || 'application/octet-stream',
+            'Cache-Control': '3600',
+            'x-upsert': 'false',
+          },
+          body: file,
+          signal: controller.signal,
+        }
+      )
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.message ?? `Upload mislukt (HTTP ${response.status})`)
+      }
+
+      // Publieke URL opbouwen zonder extra network call
+      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${fileName}`
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('Upload timeout na 30 seconden — controleer je internetverbinding.')
+      }
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -269,6 +342,31 @@ export function PostForm({
         textarea.setSelectionRange(0, transformed.length)
       }
     })
+  }
+
+  function logLabel(log: PostLog): string {
+    if (log.action === 'created') return 'Post aangemaakt'
+    if (log.action === 'deleted') return 'Post verwijderd'
+    if (log.action === 'status_changed') {
+      return `Status gewijzigd: ${log.metadata?.fromStatus ?? '-'} -> ${log.metadata?.toStatus ?? '-'}`
+    }
+    return 'Post bijgewerkt'
+  }
+
+  function formatLogValue(
+    field: 'clientId' | 'type' | 'status' | 'caption' | 'date' | 'mediaUrls',
+    value: string
+  ): string {
+    if (!value) return '(leeg)'
+    if (field === 'mediaUrls') {
+      try {
+        const parsed = JSON.parse(value) as string[]
+        return `${parsed.length} bestand(en)`
+      } catch {
+        return value
+      }
+    }
+    return value
   }
 
   if (!open) return null
@@ -426,6 +524,47 @@ export function PostForm({
                     )}
                   </div>
                 </div>
+
+                {/* Activity logs */}
+                {sharePostId && (
+                  <div className="rounded-lg border border-border-subtle bg-surface-3">
+                    <button
+                      type="button"
+                      onClick={() => setActivityOpen((v) => !v)}
+                      className="w-full px-3 py-2 flex items-center justify-between text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <span>Activiteit</span>
+                      {activityOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                    {activityOpen && (
+                      <div className="px-3 pb-3 space-y-2">
+                        {logsLoading && <p className="text-xs text-text-muted">Laden...</p>}
+                        {!logsLoading && logs.length === 0 && (
+                          <p className="text-xs text-text-muted">Nog geen logs.</p>
+                        )}
+                        {!logsLoading && logs.map((log) => (
+                          <div key={log.id} className="text-xs text-text-secondary border border-border-subtle rounded-md px-2.5 py-2 bg-surface-2">
+                            <p className="text-text-primary">{logLabel(log)}</p>
+                            {log.metadata?.changes && log.metadata.changes.length > 0 && (
+                              <div className="mt-1.5 space-y-1">
+                                {log.metadata.changes.map((change, idx) => (
+                                  <p key={`${log.id}-${idx}`} className="text-text-muted">
+                                    <span className="text-text-secondary">{change.field}</span>{' '}
+                                    {formatLogValue(change.field, change.from)} {'->'} {formatLogValue(change.field, change.to)}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-text-muted mt-1">
+                              {format(new Date(log.createdAt), 'd MMM yyyy HH:mm', { locale: nl })}
+                              {log.actorEmail ? ` · ${log.actorEmail}` : ''}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
@@ -489,7 +628,39 @@ export function PostForm({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border-subtle">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-border-subtle">
+            <div>
+              {sharePostId && onDelete && (
+                confirmDelete ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-muted">Weet je het zeker?</span>
+                    <button
+                      type="button"
+                      onClick={() => onDelete()}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                    >
+                      Ja, verwijderen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="px-4 py-2 text-sm font-medium text-red-300 border border-red-500/30 bg-red-500/10 hover:bg-red-500/15 rounded-lg transition-colors"
+                  >
+                    Verwijderen
+                  </button>
+                )
+              )}
+            </div>
+            <div className="flex items-center gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors">
               Annuleren
             </button>
@@ -500,6 +671,7 @@ export function PostForm({
             >
               {submitLoading ? 'Opslaan...' : (savedState && !isDirty ? 'Opgeslagen' : 'Opslaan')}
             </button>
+            </div>
           </div>
         </form>
       </div>
