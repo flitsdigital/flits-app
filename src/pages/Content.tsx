@@ -19,6 +19,16 @@ import {
 } from "date-fns";
 import { nl } from "date-fns/locale";
 import clsx from "clsx";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePickerButton } from "@/components/ui/date-picker-button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import {
   ChevronLeft,
   ChevronRight,
@@ -35,6 +45,8 @@ import {
   Check,
   X,
   CalendarRange,
+  ChevronsUpDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { PostForm } from "../components/PostForm";
@@ -90,6 +102,48 @@ const WEEK_PRESETS = [
   { label: '3 maanden', weeks: 13 },
 ]
 
+function ClientComboboxContent({ value, onChange, clients }: { value: string; onChange: (v: string) => void; clients: { id: string; companyName: string }[] }) {
+  const [open, setOpen] = useState(false)
+  const selected = clients.find(c => c.id === value)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
+          {selected ? selected.companyName : <span className="text-muted-foreground">Selecteer klant...</span>}
+          <ChevronsUpDown size={14} className="text-muted-foreground shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Zoek klant..." />
+          <CommandList>
+            <CommandEmpty>Geen klant gevonden.</CommandEmpty>
+            <CommandGroup>
+              {clients.map(c => (
+                <CommandItem key={c.id} value={c.companyName} onSelect={() => { onChange(c.id); setOpen(false) }}>
+                  <Check size={14} className={cn('mr-2', value === c.id ? 'opacity-100' : 'opacity-0')} />
+                  {c.companyName}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function ContentDatePicker({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <DatePickerButton
+      value={value || undefined}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="flex-1 rounded-md justify-start"
+    />
+  )
+}
+
 function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGenerated: () => void }) {
   const { clients, addPostsBulk } = useStore()
   const today = new Date()
@@ -142,6 +196,7 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
       await addPostsBulk(
         preview.map(({ date, type }) => ({ clientId, type, status: 'todo' as const, caption: '', date }))
       )
+      toast.success(`${preview.length} posts ingepland`)
       onGenerated()
       onClose()
     } finally {
@@ -152,18 +207,12 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
   const canGenerate = clientId && selectedDays.length > 0 && pattern.length > 0 && preview.length > 0
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <div className="flex items-center gap-2">
-            <CalendarRange size={15} className="text-accent-blue" />
-            <h2 className="text-sm font-semibold text-text-primary">Content plannen</h2>
-          </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
-            <X size={16} />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-row items-center gap-2 px-5 py-4 border-b border-border-subtle space-y-0">
+          <CalendarRange size={15} className="text-accent-blue" />
+          <DialogTitle className="text-sm font-semibold">Content plannen</DialogTitle>
+        </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Left: settings */}
@@ -172,13 +221,7 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
             {/* Client */}
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-2">Klant</label>
-              <select
-                value={clientId}
-                onChange={e => setClientId(e.target.value)}
-                className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-              >
-                {clients.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-              </select>
+              <ClientComboboxContent value={clientId} onChange={setClientId} clients={clients} />
             </div>
 
             {/* Period */}
@@ -196,19 +239,9 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-                />
-                <span className="text-text-muted text-sm">→</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-                />
+                <ContentDatePicker value={startDate} onChange={setStartDate} placeholder="Startdatum" />
+                <span className="text-text-muted text-sm shrink-0">→</span>
+                <ContentDatePicker value={endDate} onChange={setEndDate} placeholder="Einddatum" />
               </div>
             </div>
 
@@ -323,24 +356,53 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
               : 'Stel een patroon in om te beginnen'}
           </p>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">
-              Annuleren
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={!canGenerate || loading}
-              className="flex items-center gap-2 px-4 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
-            >
+            <Button variant="outline" onClick={onClose}>Annuleren</Button>
+            <Button onClick={handleGenerate} disabled={!canGenerate || loading} className="gap-2">
               {loading ? (
                 <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Genereren…</>
               ) : (
                 <><CalendarRange size={14} />{preview.length > 0 ? `${preview.length} posts aanmaken` : 'Aanmaken'}</>
               )}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ClientFilterCombobox({ value, onChange, clients }: { value: string; onChange: (v: string) => void; clients: { id: string; companyName: string }[] }) {
+  const [open, setOpen] = useState(false)
+  const selected = clients.find(c => c.id === value)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="h-7 text-xs justify-between font-normal min-w-[140px]">
+          {selected ? selected.companyName : 'Alle klanten'}
+          <ChevronsUpDown size={12} className="text-muted-foreground shrink-0 ml-1" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Zoek klant..." className="h-8" />
+          <CommandList>
+            <CommandEmpty>Niet gevonden.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="all" onSelect={() => { onChange('all'); setOpen(false) }}>
+                <Check size={12} className={cn('mr-2', value === 'all' ? 'opacity-100' : 'opacity-0')} />
+                Alle klanten
+              </CommandItem>
+              {clients.map(c => (
+                <CommandItem key={c.id} value={c.companyName} onSelect={() => { onChange(c.id); setOpen(false) }}>
+                  <Check size={12} className={cn('mr-2', value === c.id ? 'opacity-100' : 'opacity-0')} />
+                  {c.companyName}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -516,10 +578,18 @@ export function Content() {
             setPostFormOpen(true);
           }
         }}
-        className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs border transition-opacity cursor-grab active:cursor-grabbing ${sc.bg} ${sc.text} ${sc.border} ${isDragging ? 'opacity-30' : 'hover:opacity-80'}`}
+        className={`flex items-start gap-2 px-2 py-1.5 rounded-md border transition-all cursor-grab active:cursor-grabbing bg-surface-1/90 ${sc.border} ${isDragging ? 'opacity-30 scale-[0.98]' : 'hover:bg-surface-1 hover:border-border-default'}`}
       >
-        <Icon size={10} className="shrink-0 opacity-70" />
-        <span className="truncate font-medium">{clientName}</span>
+        <span className={`mt-[3px] w-1.5 h-1.5 rounded-full shrink-0 ${postStatusDot[post.status]}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <Icon size={10} className="shrink-0 text-text-muted" />
+            <span className="truncate font-medium text-text-primary text-[11px]">{clientName}</span>
+          </div>
+          {post.caption && (
+            <p className="truncate text-[10px] text-text-muted mt-0.5">{post.caption}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -537,20 +607,22 @@ export function Content() {
     const clientName = clientMap[post.clientId] ?? "?";
     const primaryMediaUrl = post.mediaUrls?.[0] ?? post.mediaUrl;
     const mediaCount = post.mediaUrls?.length ?? (post.mediaUrl ? 1 : 0);
+    const statusBar: Record<Post['status'], string> = {
+      todo: 'border-l-zinc-500',
+      in_progress: 'border-l-orange-500',
+      feedback: 'border-l-blue-500',
+      posted: 'border-l-green-500',
+    }
     return (
       <div
-        className={`group flex gap-3 p-3 rounded-lg border bg-surface-3 hover:bg-surface-4 transition-colors ${sc.border}`}
+        className={`group flex gap-3 p-3 rounded-lg border bg-surface-0 hover:bg-surface-1 transition-all border-l-[3px] ${statusBar[post.status]} ${sc.border}`}
       >
-        <div
-          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${sc.bg} ${sc.border}`}
-        >
-          <Icon size={13} className={sc.text} />
+        <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 border border-border-subtle bg-surface-2">
+          <Icon size={13} className="text-text-secondary" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span
-              className={`text-xs font-semibold ${sc.text}`}
-            >
+            <span className="text-xs font-semibold text-text-primary">
               {clientName}
             </span>
             <span
@@ -575,7 +647,7 @@ export function Content() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline mt-1"
+              className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline mt-1.5"
             >
               <ExternalLink size={11} />{" "}
               {post.type === "carousel" && mediaCount > 1
@@ -584,32 +656,27 @@ export function Content() {
             </a>
           )}
         </div>
-        <div className="flex gap-1 shrink-0 self-start mt-0.5">
-          <button
-            onClick={() => copyPreviewLink(post.id)}
-            className="p-1.5 rounded-md bg-surface-4/30 hover:bg-surface-4 text-text-muted hover:text-text-primary transition-colors"
-          >
-            {copiedPostId === post.id ? (
-              <Check size={12} />
-            ) : (
-              <Share2 size={12} />
-            )}
-          </button>
-          <button
-            onClick={() => {
-              setEditingPost(post);
-              setPostFormOpen(true);
-            }}
-            className="p-1.5 rounded-md bg-surface-4/30 hover:bg-surface-4 text-text-muted hover:text-text-primary transition-colors"
-          >
-            <Edit2 size={12} />
-          </button>
-          <button
-            onClick={() => deletePost(post.id)}
-            className="p-1.5 rounded-md bg-surface-4/30 hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
-          >
-            <Trash2 size={12} />
-          </button>
+        <div className="shrink-0 self-start mt-0.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-text-muted opacity-0 group-hover:opacity-100">
+                <MoreHorizontal size={13} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => { setEditingPost(post); setPostFormOpen(true) }}>
+                <Edit2 size={12} className="mr-2" /> Bewerken
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => copyPreviewLink(post.id)}>
+                {copiedPostId === post.id ? <Check size={12} className="mr-2" /> : <Share2 size={12} className="mr-2" />}
+                {copiedPostId === post.id ? 'Gekopieerd!' : 'Preview link'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { deletePost(post.id); toast.success('Post verwijderd') }}>
+                <Trash2 size={12} className="mr-2" /> Verwijderen
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     );
@@ -622,33 +689,24 @@ export function Content() {
         subtitle="Content kalender"
         actions={
           <>
-            <select
-              className="bg-surface-1 border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-              value={filterClientId}
-              onChange={(e) => setFilterClientId(e.target.value)}
-            >
-              <option value="all">Alle klanten</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.companyName}</option>
-              ))}
-            </select>
-            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
-              {(["month", "week", "list"] as ViewMode[]).map((v) => (
-                <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === v ? "bg-white/[0.08] text-text-primary" : "text-text-muted hover:text-text-secondary"}`}>
-                  {v === "month" ? "Maand" : v === "week" ? "Week" : "Lijst"}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setPlanModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 border border-border-subtle hover:border-zinc-600 text-text-secondary hover:text-text-primary text-sm font-medium rounded-lg transition-colors">
-              <CalendarRange size={14} /> Content plannen
-            </button>
-            <button onClick={() => openNewPost()} className="flex items-center gap-2 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-              <Plus size={14} /> Post toevoegen
-            </button>
+            <ClientFilterCombobox value={filterClientId} onChange={setFilterClientId} clients={clients} />
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList className="h-7">
+                <TabsTrigger value="month" className="text-xs h-6 px-2.5">Maand</TabsTrigger>
+                <TabsTrigger value="week" className="text-xs h-6 px-2.5">Week</TabsTrigger>
+                <TabsTrigger value="list" className="text-xs h-6 px-2.5">Lijst</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button variant="outline" size="sm" onClick={() => setPlanModalOpen(true)} className="h-7 text-xs gap-1.5">
+              <CalendarRange size={12} /> Content plannen
+            </Button>
+            <Button size="sm" onClick={() => openNewPost()} className="h-7 text-xs gap-1.5">
+              <Plus size={12} /> Post toevoegen
+            </Button>
           </>
         }
       />
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-6 py-5 max-w-full">
 
       {/* Stats — alleen bij kalenderviews */}
       <div className={`flex items-center gap-4 mb-5 ${viewMode === "list" ? "hidden" : ""}`}>
@@ -679,7 +737,7 @@ export function Content() {
       {/* Kalender — alleen bij maand/week view */}
       {viewMode !== "list" && <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
         {/* Navigatie */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
           <button
             onClick={prev}
             className="p-1.5 rounded-lg hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors"
@@ -907,7 +965,7 @@ export function Content() {
             </div>
 
             {sorted.length === 0 && (
-              <div className="px-5 py-10 text-sm text-text-muted text-center">Geen posts gevonden.</div>
+              <div className="px-4 py-10 text-xs text-text-muted text-center">Geen posts gevonden.</div>
             )}
 
             {groups.map((group) => (
@@ -1048,8 +1106,8 @@ export function Content() {
         (() => {
           const dayPosts = postsForDay(selectedDay);
           return (
-            <div className="mt-4 bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle">
+            <div className="mt-4 bg-surface-1 border border-border-subtle rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
                 <h3 className="text-sm font-medium text-text-primary capitalize">
                   {format(selectedDay, "EEEE d MMMM", { locale: nl })}
                   <span className="text-text-muted font-normal ml-2">
@@ -1058,17 +1116,17 @@ export function Content() {
                 </h3>
                 <button
                   onClick={() => openNewPost(selectedDay)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-3 hover:bg-surface-4 border border-border-subtle text-text-secondary hover:text-text-primary text-xs font-medium rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-3 hover:bg-surface-4 border border-border-subtle text-text-secondary hover:text-text-primary text-xs font-medium rounded transition-colors"
                 >
                   <Plus size={12} /> Toevoegen
                 </button>
               </div>
               {dayPosts.length === 0 ? (
-                <div className="px-5 py-6 text-sm text-text-muted text-center">
+                <div className="px-4 py-6 text-xs text-text-muted text-center">
                   Geen posts op deze dag.
                 </div>
               ) : (
-                <div className="p-4 grid grid-cols-2 gap-3">
+                <div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {dayPosts.map((post) => (
                     <PostCard key={post.id} post={post} />
                   ))}
@@ -1088,16 +1146,22 @@ export function Content() {
         onSave={async (data) => {
           if (editingPost) {
             await updatePost(editingPost.id, data);
+            toast.success('Post opgeslagen')
           } else {
             const created = await addPost(data);
+            toast.success('Post aangemaakt')
             setEditingPost(created);
           }
         }}
         onDelete={editingPost ? async () => {
           await deletePost(editingPost.id);
+          toast.success('Post verwijderd')
           setPostFormOpen(false);
           setEditingPost(null);
         } : undefined}
+        onDuplicate={async (data) => {
+          await addPost(data)
+        }}
         initial={
           editingPost ??
           (defaultDate ? ({ date: defaultDate } as Partial<Post>) : undefined)

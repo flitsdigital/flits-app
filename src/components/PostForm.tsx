@@ -1,11 +1,28 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { X, Image, Video, Film, Square, Layers, Upload, Loader2, ExternalLink, GripVertical, Share2, Check, ChevronDown, ChevronRight } from 'lucide-react'
-import clsx from 'clsx'
-import type { Post, PostType, PostStatus, Client, PostLog } from '../types'
-import { supabase } from '../lib/supabase'
-import { postLogDb } from '../lib/db'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
+import {
+  Image, Video, Film, Square, Layers, Upload, Loader2,
+  ExternalLink, GripVertical, Share2, Copy, Trash2, X, Bold,
+  Circle, CircleDot, Eye, CheckCircle2,
+} from 'lucide-react'
+import type { Post, PostType, PostStatus, Client } from '../types'
+import { supabase } from '../lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Progress } from '@/components/ui/progress'
+import { DatePickerButton } from '@/components/ui/date-picker-button'
+import { PillDropdown } from '@/components/ui/pill-dropdown'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+} from '@/components/ui/drawer'
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { cn } from '@/lib/utils'
 
 type FormData = Omit<Post, 'id' | 'createdAt' | 'updatedAt'>
 
@@ -17,19 +34,53 @@ const POST_TYPES: { value: PostType; label: string; icon: React.ElementType }[] 
   { value: 'carousel', label: 'Carousel', icon: Layers },
 ]
 
-const POST_STATUSES: { value: PostStatus; label: string; color: string }[] = [
-  { value: 'todo',        label: 'Te doen',             color: 'border-zinc-600 text-zinc-400 bg-zinc-800/50' },
-  { value: 'in_progress', label: 'Bezig',                color: 'border-orange-500/40 text-orange-400 bg-orange-500/10' },
-  { value: 'feedback',    label: 'Klaar voor feedback',  color: 'border-blue-500/40 text-blue-400 bg-blue-500/10' },
-  { value: 'posted',      label: 'Gepost',               color: 'border-green-500/40 text-green-400 bg-green-500/10' },
+const POST_STATUSES: { value: PostStatus; label: string; Icon: React.ElementType; color: string }[] = [
+  { value: 'todo',        label: 'Te doen',             Icon: Circle,       color: 'text-zinc-400' },
+  { value: 'in_progress', label: 'Bezig',               Icon: CircleDot,    color: 'text-orange-400' },
+  { value: 'feedback',    label: 'Klaar voor feedback', Icon: Eye,          color: 'text-blue-400' },
+  { value: 'posted',      label: 'Gepost',              Icon: CheckCircle2, color: 'text-green-400' },
 ]
 
-const inputCls = 'w-full bg-surface-3 border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/30 transition-colors'
+const NONE_CLIENT = '__none__'
+
+function PostClientSelect({
+  value, onChange, clients, disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  clients: Client[]
+  disabled?: boolean
+}) {
+  const options = [NONE_CLIENT, ...clients.map(c => c.id)]
+  return (
+    <PillDropdown
+      options={options}
+      value={value || NONE_CLIENT}
+      onChange={(v) => onChange(v === NONE_CLIENT ? '' : v)}
+      disabled={disabled}
+      renderLabel={(v) => {
+        const name = v === NONE_CLIENT ? 'Klant' : (clients.find(c => c.id === v)?.companyName ?? 'Klant')
+        return (
+          <>
+            <span className="size-2 rounded-full bg-muted-foreground/40 shrink-0" />
+            <span className="max-w-[120px] truncate">{name}</span>
+          </>
+        )
+      }}
+      renderOption={(v) => {
+        if (v === NONE_CLIENT) return <span className="text-muted-foreground">Geen klant</span>
+        const c = clients.find(x => x.id === v)!
+        return <span>{c.companyName}</span>
+      }}
+    />
+  )
+}
 
 interface Props {
   open: boolean
   onClose: () => void
   onSave: (data: FormData) => void | Promise<void>
+  onDuplicate?: (data: FormData) => void | Promise<void>
   onDelete?: () => void | Promise<void>
   initial?: Partial<Post>
   clientId: string
@@ -43,13 +94,13 @@ export function PostForm({
   open,
   onClose,
   onSave,
+  onDuplicate,
   onDelete,
   initial,
   clientId,
   clients = [],
   lockClient = false,
   sharePostId,
-  title = 'Post toevoegen',
 }: Props) {
   const [form, setForm] = useState<FormData>({
     clientId,
@@ -62,28 +113,26 @@ export function PostForm({
     ...initial,
   })
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [submitLoading, setSubmitLoading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
   const [savedState, setSavedState] = useState(false)
   const [initialSnapshot, setInitialSnapshot] = useState('')
-  const captionRef = useRef<HTMLTextAreaElement | null>(null)
-  const [activityOpen, setActivityOpen] = useState(false)
-  const [logs, setLogs] = useState<PostLog[]>([])
-  const [logsLoading, setLogsLoading] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const captionRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // Snapshot refs zodat we bij het openen altijd de juiste waarden hebben
-  // zonder dat een nieuwe object-referentie van `initial` de effect opnieuw laat vuren
-  // terwijl de modal al open is (zou anders `uploading` resetten mid-upload).
   const initialRef = useRef(initial)
   const clientIdRef = useRef(clientId)
   useEffect(() => { initialRef.current = initial }, [initial])
   useEffect(() => { clientIdRef.current = clientId }, [clientId])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setConfirmDelete(false)
+      return
+    }
     const baseDate = new Date().toISOString().slice(0, 10)
     const nextForm: FormData = {
       clientId: clientIdRef.current,
@@ -110,30 +159,13 @@ export function PostForm({
     setSavedState(false)
     setConfirmDelete(false)
     setInitialSnapshot(JSON.stringify(normalizedForm(nextForm)))
-    setActivityOpen(false)
-  // Alleen resetten wanneer de modal opent — NIET bij elke prop-wijziging,
-  // want dat reset ook `uploading` terwijl een upload bezig is.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
 
-  useEffect(() => {
-    async function loadLogs() {
-      if (!open || !sharePostId) {
-        setLogs([])
-        return
-      }
-      setLogsLoading(true)
-      try {
-        const entries = await postLogDb.fetchForPost(sharePostId)
-        setLogs(entries)
-      } catch {
-        setLogs([])
-      } finally {
-        setLogsLoading(false)
-      }
+    // Focus caption after drawer open animation completes
+    if (open) {
+      window.setTimeout(() => captionRef.current?.focus(), 300)
     }
-    loadLogs()
-  }, [open, sharePostId, savedState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const isDirty = useMemo(
     () => JSON.stringify(normalizedForm(form)) !== initialSnapshot,
@@ -146,29 +178,29 @@ export function PostForm({
 
   function normalizedForm(value: FormData) {
     const mediaUrls = value.mediaUrls ?? (value.mediaUrl ? [value.mediaUrl] : [])
-    return {
-      ...value,
-      mediaUrls,
-      mediaUrl: mediaUrls[0] ?? undefined,
-    }
+    return { ...value, mediaUrls, mediaUrl: mediaUrls[0] ?? undefined }
   }
 
   async function uploadImage(file: File) {
     const bucket = import.meta.env.VITE_SUPABASE_POST_MEDIA_BUCKET || 'post-media'
     const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, '')
-    const anonKey   = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const fileName  = `${form.clientId}/${crypto.randomUUID()}.${extension}`
+    const fileName = `${form.clientId}/${crypto.randomUUID()}.${extension}`
 
-    // Haal sessie-token op (cached, geen network call)
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token ?? anonKey
 
-    // Gebruik raw fetch + AbortController zodat de upload écht gecanceld kan worden
+    console.debug('[upload] bucket:', bucket)
+    console.debug('[upload] url:', `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`)
+    console.debug('[upload] file:', file.name, file.type, file.size, 'bytes')
+    console.debug('[upload] auth token type:', sessionData?.session?.access_token ? 'session' : 'anon key')
+
     const controller = new AbortController()
-    const timeoutId  = window.setTimeout(() => controller.abort(), 30_000)
+    const timeoutId = window.setTimeout(() => controller.abort(), 30_000)
 
     try {
+      console.debug('[upload] fetching...')
       const response = await fetch(
         `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`,
         {
@@ -184,18 +216,21 @@ export function PostForm({
           signal: controller.signal,
         }
       )
-
+      console.debug('[upload] response status:', response.status, response.statusText)
       if (!response.ok) {
         const err = await response.json().catch(() => null)
+        console.error('[upload] error body:', err)
         throw new Error(err?.message ?? `Upload mislukt (HTTP ${response.status})`)
       }
-
-      // Publieke URL opbouwen zonder extra network call
-      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${fileName}`
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${fileName}`
+      console.debug('[upload] success, public url:', publicUrl)
+      return publicUrl
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
+        console.error('[upload] aborted (timeout)')
         throw new Error('Upload timeout na 30 seconden — controleer je internetverbinding.')
       }
+      console.error('[upload] caught error:', err)
       throw err
     } finally {
       clearTimeout(timeoutId)
@@ -204,31 +239,37 @@ export function PostForm({
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
+    console.debug('[handleFileChange] files selected:', files.length)
     if (!files.length) return
-
     const invalid = files.find((file) => !file.type.startsWith('image/'))
     if (invalid) {
+      console.warn('[handleFileChange] invalid file type:', invalid.type)
       setUploadError('Kies alleen afbeeldingen (jpg, png, webp, ...).')
       return
     }
-
     setUploadError(null)
     setUploading(true)
+    setUploadProgress(10)
     try {
-      const uploadedUrls = await Promise.all(files.map((file) => uploadImage(file)))
+      const uploadedUrls: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        console.debug(`[handleFileChange] uploading file ${i + 1}/${files.length}:`, files[i].name)
+        const url = await uploadImage(files[i])
+        uploadedUrls.push(url)
+        setUploadProgress(Math.round(((i + 1) / files.length) * 90) + 10)
+      }
+      console.debug('[handleFileChange] all uploads done, urls:', uploadedUrls)
       setForm((prev) => {
         const existing = prev.mediaUrls ?? (prev.mediaUrl ? [prev.mediaUrl] : [])
         const mediaUrls = [...existing, ...uploadedUrls]
-        return {
-          ...prev,
-          mediaUrls,
-          mediaUrl: mediaUrls[0],
-        }
+        return { ...prev, mediaUrls, mediaUrl: mediaUrls[0] }
       })
     } catch (error) {
+      console.error('[handleFileChange] upload failed:', error)
       setUploadError(error instanceof Error ? error.message : 'Uploaden is mislukt.')
     } finally {
       setUploading(false)
+      setUploadProgress(0)
       e.target.value = ''
     }
   }
@@ -237,11 +278,7 @@ export function PostForm({
     setForm((prev) => {
       const current = prev.mediaUrls ?? (prev.mediaUrl ? [prev.mediaUrl] : [])
       const mediaUrls = current.filter((_, i) => i !== index)
-      return {
-        ...prev,
-        mediaUrls,
-        mediaUrl: mediaUrls[0],
-      }
+      return { ...prev, mediaUrls, mediaUrl: mediaUrls[0] }
     })
   }
 
@@ -251,11 +288,7 @@ export function PostForm({
       if (from < 0 || to < 0 || from >= current.length || to >= current.length || from === to) return prev
       const [moved] = current.splice(from, 1)
       current.splice(to, 0, moved)
-      return {
-        ...prev,
-        mediaUrls: current,
-        mediaUrl: current[0],
-      }
+      return { ...prev, mediaUrls: current, mediaUrl: current[0] }
     })
   }
 
@@ -269,11 +302,7 @@ export function PostForm({
     setUploadError(null)
     setSubmitLoading(true)
     try {
-      const payload: FormData = {
-        ...form,
-        mediaUrls,
-        mediaUrl: mediaUrls[0],
-      }
+      const payload: FormData = { ...form, mediaUrls, mediaUrl: mediaUrls[0] }
       await onSave(payload)
       setSavedState(true)
       setInitialSnapshot(JSON.stringify(normalizedForm(payload)))
@@ -285,9 +314,7 @@ export function PostForm({
   }
 
   useEffect(() => {
-    if (isDirty && savedState) {
-      setSavedState(false)
-    }
+    if (isDirty && savedState) setSavedState(false)
   }, [isDirty, savedState])
 
   async function copyPreviewLink() {
@@ -306,11 +333,9 @@ export function PostForm({
     return Array.from(input).map((char) => {
       const code = char.codePointAt(0)
       if (!code) return char
-
-      // Mathematical Sans-Serif Bold
-      if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65)) // A-Z
-      if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97)) // a-z
-      if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48)) // 0-9
+      if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65))
+      if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97))
+      if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48))
       return char
     }).join('')
   }
@@ -318,363 +343,338 @@ export function PostForm({
   function applyBoldToSelection() {
     const textarea = captionRef.current
     if (!textarea) return
-
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
     const hasSelection = end > start
     const source = form.caption || ''
-
     const selected = hasSelection ? source.slice(start, end) : source
     if (!selected) return
-
     const transformed = toUnicodeBold(selected)
     const nextCaption = hasSelection
       ? `${source.slice(0, start)}${transformed}${source.slice(end)}`
       : transformed
-
     set('caption', nextCaption)
-
     window.requestAnimationFrame(() => {
       textarea.focus()
-      if (hasSelection) {
-        textarea.setSelectionRange(start, start + transformed.length)
-      } else {
-        textarea.setSelectionRange(0, transformed.length)
-      }
+      if (hasSelection) textarea.setSelectionRange(start, start + transformed.length)
+      else textarea.setSelectionRange(0, transformed.length)
     })
   }
 
-  function logLabel(log: PostLog): string {
-    if (log.action === 'created') return 'Post aangemaakt'
-    if (log.action === 'deleted') return 'Post verwijderd'
-    if (log.action === 'status_changed') {
-      return `Status gewijzigd: ${log.metadata?.fromStatus ?? '-'} -> ${log.metadata?.toStatus ?? '-'}`
-    }
-    return 'Post bijgewerkt'
+  async function handleDuplicate() {
+    if (!onDuplicate) return
+    await onDuplicate({ ...form, mediaUrls: form.mediaUrls ?? (form.mediaUrl ? [form.mediaUrl] : []) })
   }
 
-  function formatLogValue(
-    field: 'clientId' | 'type' | 'status' | 'caption' | 'date' | 'mediaUrls',
-    value: string
-  ): string {
-    if (!value) return '(leeg)'
-    if (field === 'mediaUrls') {
-      try {
-        const parsed = JSON.parse(value) as string[]
-        return `${parsed.length} bestand(en)`
-      } catch {
-        return value
-      }
-    }
-    return value
+  async function handleDelete() {
+    setConfirmDelete(false)
+    if (onDelete) await onDelete()
   }
 
-  if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-5xl max-h-[90vh] bg-surface-2 rounded-xl border border-border-subtle shadow-2xl overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-          <div className="flex items-center gap-1.5">
+    <Drawer
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      direction="right"
+      // vaul drawers don't use Radix FocusScope — Popovers work natively
+    >
+      <DrawerContent className="inset-y-0 right-0 left-auto mt-0 h-full w-[500px] rounded-none border-l rounded-l-xl flex flex-col [&>div:first-child]:hidden outline-none">
+        <DrawerTitle className="sr-only">
+          {initial?.id ? 'Post bewerken' : 'Nieuwe post maken'}
+        </DrawerTitle>
+
+        {/* Top bar */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
+          <Breadcrumb>
+            <BreadcrumbList className="text-xs gap-1 sm:gap-1.5">
+              <BreadcrumbItem>
+                <span className="text-muted-foreground">Content</span>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="[&>svg]:size-3" />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="text-muted-foreground">
+                  {initial?.id ? 'Post bewerken' : 'Nieuwe post'}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="ml-auto flex items-center gap-1">
             {sharePostId && (
-              <button
-                type="button"
+              <Button
+                type="button" variant="ghost" size="icon"
                 onClick={copyPreviewLink}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg bg-surface-3 border border-border-subtle text-text-secondary hover:text-text-primary hover:bg-surface-4 transition-colors"
+                className="size-6 text-muted-foreground"
+                title={copied ? 'Gekopieerd!' : 'Deel preview link'}
               >
-                {copied ? <Check size={13} /> : <Share2 size={13} />}
-                {copied ? 'Gekopieerd' : 'Share'}
-              </button>
+                <Share2 className="size-3.5" />
+              </Button>
             )}
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors">
-              <X size={15} />
-            </button>
+            {onDuplicate && (
+              <Button
+                type="button" variant="ghost" size="icon"
+                onClick={handleDuplicate}
+                className="size-6 text-muted-foreground"
+                title="Dupliceren"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            )}
+            <Button
+              type="button" variant="ghost" size="icon"
+              onClick={onClose}
+              className="size-6 text-muted-foreground"
+            >
+              <X className="size-3.5" />
+            </Button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <div className="space-y-4">
-                {/* Klant */}
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Klant</label>
-                  {lockClient ? (
-                    <div className={clsx(inputCls, 'flex items-center bg-surface-3/70')}>
-                      {clients.find((c) => c.id === form.clientId)?.companyName ?? 'Onbekende klant'}
+
+            {/* Title */}
+            <div className="px-5 pt-4 pb-2 shrink-0">
+              <h2 className="text-base font-medium text-foreground">
+                {initial?.id ? 'Post bewerken' : 'Nieuwe post maken'}
+              </h2>
+            </div>
+
+            {/* Metadata row — status, client, type, date */}
+            <div className="px-5 pb-3 flex items-center gap-1.5 flex-wrap shrink-0">
+
+              {/* Status */}
+              <PillDropdown
+                options={POST_STATUSES.map(s => s.value)}
+                value={form.status}
+                onChange={(v) => set('status', v as PostStatus)}
+                renderLabel={(v) => {
+                  const s = POST_STATUSES.find(x => x.value === v)!
+                  return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
+                }}
+                renderOption={(v) => {
+                  const s = POST_STATUSES.find(x => x.value === v)!
+                  return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
+                }}
+              />
+
+              {/* Client */}
+              {clients.length > 0 && (
+                <PostClientSelect
+                  value={form.clientId}
+                  onChange={(v) => set('clientId', v)}
+                  clients={clients}
+                  disabled={lockClient}
+                />
+              )}
+
+              {/* Type */}
+              <PillDropdown
+                options={POST_TYPES.map(t => t.value)}
+                value={form.type}
+                onChange={(v) => set('type', v as PostType)}
+                renderLabel={(v) => {
+                  const t = POST_TYPES.find(x => x.value === v)!
+                  const Icon = t.icon
+                  return <><Icon className="size-3 shrink-0" /><span>{t.label}</span></>
+                }}
+                renderOption={(v) => {
+                  const t = POST_TYPES.find(x => x.value === v)!
+                  const Icon = t.icon
+                  return <><Icon className="size-3 shrink-0 text-muted-foreground" /><span>{t.label}</span></>
+                }}
+              />
+
+              {/* Date */}
+              <DatePickerButton
+                value={form.date}
+                onChange={(v) => set('date', v)}
+              />
+
+            </div>
+
+            {/* Photo upload */}
+            <div className="px-5 pt-3 pb-3 border-b border-border shrink-0">
+              {(form.mediaUrls?.length ?? 0) === 0 ? (
+                <label className={cn(
+                  'w-full flex flex-col items-center justify-center gap-2 bg-muted/30 border border-border rounded-lg py-8 transition-colors',
+                  uploading
+                    ? 'text-muted-foreground'
+                    : 'text-muted-foreground hover:text-foreground cursor-pointer'
+                )}>
+                  {uploading
+                    ? <Loader2 className="size-5 animate-spin" />
+                    : <Upload className="size-5" />}
+                  <span className="text-sm">
+                    {uploading ? 'Uploaden...' : 'Voeg foto(s) toe'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple={form.type === 'carousel'}
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+                  {form.type === 'carousel' ? (
+                    <div className="p-2 space-y-2">
+                      {form.mediaUrls?.map((url, index) => (
+                        <div
+                          key={`${url}-${index}`}
+                          draggable
+                          onDragStart={() => setDragIndex(index)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => {
+                            if (dragIndex !== null) {
+                              moveMedia(dragIndex, index)
+                              setDragIndex(null)
+                            }
+                          }}
+                          onDragEnd={() => setDragIndex(null)}
+                          className="flex items-center gap-2 rounded border border-border bg-muted/30 p-2"
+                        >
+                          <GripVertical className="size-3 text-muted-foreground shrink-0 cursor-grab" />
+                          <img
+                            src={url}
+                            alt={`Slide ${index + 1}`}
+                            className="size-10 object-cover rounded shrink-0"
+                          />
+                          <span className="text-xs text-muted-foreground flex-1">
+                            Slide {index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMediaAt(index)}
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <label className="flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                        <Upload className="size-3" />
+                        Meer toevoegen
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+                      </label>
                     </div>
                   ) : (
-                    <select
-                      className={inputCls}
-                      value={form.clientId}
-                      onChange={(e) => set('clientId', e.target.value)}
-                    >
-                      {clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.companyName}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <img
+                        src={form.mediaUrls?.[0]}
+                        alt="Preview"
+                        className="w-full max-h-64 object-contain bg-background"
+                      />
+                      <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                        <a
+                          href={form.mediaUrls?.[0]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                        >
+                          <ExternalLink className="size-2.5" /> Open
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, mediaUrl: undefined, mediaUrls: [] }))}
+                          className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          Verwijder
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
-
-                {/* Caption */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="block text-xs font-medium text-text-secondary">Caption / tekst</label>
-                    <button
-                      type="button"
-                      onClick={applyBoldToSelection}
-                      className="px-2 py-1 text-xs rounded-md border border-border-subtle bg-surface-3 text-text-secondary hover:text-text-primary hover:bg-surface-4 transition-colors"
-                      title="Maak selectie unicode bold"
-                    >
-                      𝗕 Bold
-                    </button>
-                  </div>
-                  <textarea
-                    ref={captionRef}
-                    className={clsx(inputCls, 'resize-y min-h-36')}
-                    rows={6}
-                    placeholder="Schrijf hier de caption…"
-                    value={form.caption}
-                    onChange={(e) => set('caption', e.target.value)}
-                  />
+              )}
+              {uploading && uploadProgress > 0 && (
+                <div className="mt-2">
+                  <Progress value={uploadProgress} className="h-1" />
                 </div>
-
-                {/* Media upload */}
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Foto uploaden</label>
-                  <div className="space-y-2">
-                    <label className={clsx(
-                      'w-full flex items-center justify-center gap-2 bg-surface-3 border border-border-subtle rounded-lg px-3 py-2.5 text-sm transition-colors',
-                      uploading ? 'text-text-muted' : 'text-text-secondary hover:text-text-primary hover:border-border-default cursor-pointer'
-                    )}>
-                      {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                      {uploading ? 'Uploaden...' : (form.type === 'carousel' ? 'Kies meerdere foto\'s' : 'Kies foto')}
-                      <input type="file" accept="image/*" multiple={form.type === 'carousel'} className="hidden" onChange={handleFileChange} disabled={uploading} />
-                    </label>
-
-                    {uploadError && (
-                      <p className="text-xs text-red-400">{uploadError}</p>
-                    )}
-
-                    {(form.mediaUrls?.length ?? 0) > 0 && (
-                      <div className="rounded-lg border border-border-subtle bg-surface-3 p-2.5">
-                        {form.type === 'carousel' ? (
-                          <>
-                            <p className="text-xs text-text-muted mb-2">Sleep om de volgorde te bepalen.</p>
-                            <div className="space-y-2">
-                              {form.mediaUrls?.map((url, index) => (
-                                <div
-                                  key={`${url}-${index}`}
-                                  draggable
-                                  onDragStart={() => setDragIndex(index)}
-                                  onDragOver={(e) => e.preventDefault()}
-                                  onDrop={() => {
-                                    if (dragIndex === null) return
-                                    moveMedia(dragIndex, index)
-                                    setDragIndex(null)
-                                  }}
-                                  onDragEnd={() => setDragIndex(null)}
-                                  className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 p-2"
-                                >
-                                  <GripVertical size={14} className="text-text-muted shrink-0 cursor-grab" />
-                                  <img src={url} alt={`Carousel ${index + 1}`} className="w-14 h-14 object-cover rounded-md border border-border-subtle shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-text-secondary">Slide {index + 1}</p>
-                                    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline">
-                                      <ExternalLink size={11} />
-                                      Open afbeelding
-                                    </a>
-                                  </div>
-                                  <button type="button" onClick={() => removeMediaAt(index)} className="text-xs text-text-muted hover:text-red-400 transition-colors">
-                                    Verwijder
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <img src={form.mediaUrls?.[0]} alt="Preview" className="w-full h-52 object-contain rounded-md border border-border-subtle bg-surface-2" />
-                            <div className="mt-2 flex items-center justify-between">
-                              <a
-                                href={form.mediaUrls?.[0]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline"
-                              >
-                                <ExternalLink size={11} />
-                                Open afbeelding
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => setForm((prev) => ({ ...prev, mediaUrl: undefined, mediaUrls: [] }))}
-                                className="text-xs text-text-muted hover:text-text-primary transition-colors"
-                              >
-                                Verwijder
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity logs */}
-                {sharePostId && (
-                  <div className="rounded-lg border border-border-subtle bg-surface-3">
-                    <button
-                      type="button"
-                      onClick={() => setActivityOpen((v) => !v)}
-                      className="w-full px-3 py-2 flex items-center justify-between text-xs text-text-secondary hover:text-text-primary transition-colors"
-                    >
-                      <span>Activiteit</span>
-                      {activityOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
-                    {activityOpen && (
-                      <div className="px-3 pb-3 space-y-2">
-                        {logsLoading && <p className="text-xs text-text-muted">Laden...</p>}
-                        {!logsLoading && logs.length === 0 && (
-                          <p className="text-xs text-text-muted">Nog geen logs.</p>
-                        )}
-                        {!logsLoading && logs.map((log) => (
-                          <div key={log.id} className="text-xs text-text-secondary border border-border-subtle rounded-md px-2.5 py-2 bg-surface-2">
-                            <p className="text-text-primary">{logLabel(log)}</p>
-                            {log.metadata?.changes && log.metadata.changes.length > 0 && (
-                              <div className="mt-1.5 space-y-1">
-                                {log.metadata.changes.map((change, idx) => (
-                                  <p key={`${log.id}-${idx}`} className="text-text-muted">
-                                    <span className="text-text-secondary">{change.field}</span>{' '}
-                                    {formatLogValue(change.field, change.from)} {'->'} {formatLogValue(change.field, change.to)}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                            <p className="text-text-muted mt-1">
-                              {format(new Date(log.createdAt), 'd MMM yyyy HH:mm', { locale: nl })}
-                              {log.actorEmail ? ` · ${log.actorEmail}` : ''}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
-                {/* Type */}
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-2">Type (meta)</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {POST_TYPES.map(({ value, label, icon: Icon }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => set('type', value)}
-                        className={clsx(
-                          'flex items-center justify-center gap-1 py-2 rounded-lg border text-xs font-medium transition-colors',
-                          form.type === value
-                            ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue'
-                            : 'bg-surface-3 border-border-subtle text-text-muted hover:text-text-secondary hover:border-border-default'
-                        )}
-                      >
-                        <Icon size={13} />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Status */}
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-2">Status (meta)</label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {POST_STATUSES.map(({ value, label, color }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => set('status', value)}
-                        className={clsx(
-                          'w-full py-2 rounded-lg border text-xs font-medium transition-all',
-                          form.status === value ? color : 'bg-surface-3 border-border-subtle text-text-muted hover:text-text-secondary'
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Datum */}
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">
-                    {form.status === 'posted' ? 'Postdatum' : 'Geplande datum'}
-                  </label>
-                  <input
-                    type="date"
-                    className={inputCls}
-                    value={form.date ?? ''}
-                    onChange={(e) => set('date', e.target.value || undefined)}
-                  />
-                </div>
-              </aside>
+              )}
+              {uploadError && (
+                <p className="text-xs text-destructive mt-2">{uploadError}</p>
+              )}
             </div>
-          </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-border-subtle">
+            {/* Caption — grows to fill remaining space */}
+            <div className="relative flex-1 min-h-0 flex flex-col px-5 pt-3 pb-1">
+              <Textarea
+                ref={captionRef}
+                placeholder="Begin hier met het schrijven van de caption..."
+                value={form.caption}
+                onChange={(e) => set('caption', e.target.value)}
+                className="flex-1 min-h-0 pr-10 bg-transparent border-none shadow-none outline-none text-sm text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:border-none focus:text-foreground resize-none leading-relaxed overflow-y-auto"
+              />
+              {/* Bold toolbar — pinned top-right of caption area */}
+              <div className="absolute top-5 right-8">
+                <button
+                  type="button"
+                  onClick={applyBoldToSelection}
+                  title="Vet (Unicode bold)"
+                  className="bg-background border border-border flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <Bold className="size-3" />
+                </button>
+              </div>
+            </div>
+
+          {/* Footer */}
+          <div className="border-t border-border px-4 py-3 flex items-center justify-between shrink-0">
             <div>
-              {sharePostId && onDelete && (
+              {onDelete && (
                 confirmDelete ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-text-muted">Weet je het zeker?</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Verwijderen?</span>
                     <button
                       type="button"
-                      onClick={() => onDelete()}
-                      className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                      onClick={handleDelete}
+                      className="text-destructive hover:text-red-300 font-medium transition-colors"
                     >
-                      Ja, verwijderen
+                      Ja
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(false)}
-                      className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Annuleren
+                      Nee
                     </button>
                   </div>
                 ) : (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setConfirmDelete(true)}
-                    className="px-4 py-2 text-sm font-medium text-red-300 border border-red-500/30 bg-red-500/10 hover:bg-red-500/15 rounded-lg transition-colors"
+                    className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   >
-                    Verwijderen
-                  </button>
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 )
               )}
             </div>
-            <div className="flex items-center gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors">
-              Annuleren
-            </button>
-            <button
+            <Button
               type="submit"
+              size="sm"
               disabled={submitLoading || uploading || !isDirty}
-              className="px-4 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              className="h-7 text-xs"
             >
-              {submitLoading ? 'Opslaan...' : (savedState && !isDirty ? 'Opgeslagen' : 'Opslaan')}
-            </button>
-            </div>
+              {submitLoading
+                ? 'Opslaan...'
+                : savedState && !isDirty
+                  ? 'Opgeslagen ✓'
+                  : 'Opslaan'}
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DrawerContent>
+    </Drawer>
   )
 }

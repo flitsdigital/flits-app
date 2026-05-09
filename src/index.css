@@ -3,43 +3,111 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* shadcn/ui CSS variables — dark theme mapped to existing design tokens */
+    --background: 240 5% 6%;          /* #0f0f11  ≈ surface-0 */
+    --foreground: 240 3% 94%;         /* #f0f0f2  = text-primary */
+
+    --card: 240 5% 10%;               /* #18181c  ≈ surface-2 */
+    --card-foreground: 240 3% 94%;
+
+    --popover: 240 5% 12%;            /* #1c1c21  ≈ surface-2/3 */
+    --popover-foreground: 240 3% 94%;
+
+    --primary: 231 89% 64%;           /* #4c6ef5  = accent-blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 16%;          /* #24242a  ≈ surface-3 */
+    --secondary-foreground: 240 3% 94%;
+
+    --muted: 240 5% 16%;
+    --muted-foreground: 240 4% 50%;   /* #7e7e88  ≈ text-secondary */
+
+    --accent: 240 5% 20%;             /* hover/highlight surface */
+    --accent-foreground: 240 3% 94%;
+
+    --destructive: 358 72% 59%;       /* #e5484d  = accent-red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 4% 16%;             /* #24242a  ≈ border-subtle */
+    --input: 240 4% 16%;
+    --ring: 231 89% 64%;              /* = primary */
+
+    --radius: 0.375rem;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+
+    /* chart placeholders */
+    --chart-1: 231 89% 64%;
+    --chart-2: 152 72% 45%;
+    --chart-3: 33 95% 55%;
+    --chart-4: 270 72% 72%;
+    --chart-5: 358 72% 59%;
+
+    /* sidebar */
+    --sidebar-background: 240 5% 8%;
+    --sidebar-foreground: 240 3% 94%;
+    --sidebar-primary: 231 89% 64%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 14%;
+    --sidebar-accent-foreground: 240 3% 94%;
+    --sidebar-border: 240 4% 14%;
+    --sidebar-ring: 231 89% 64%;
+  }
+
   * {
     box-sizing: border-box;
+    border-color: hsl(var(--border));
   }
 
   html {
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    font-size: 13px;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
     @apply bg-surface-0 text-text-primary;
     margin: 0;
+    line-height: 1.5;
   }
 
+  /* Hairline scrollbars */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
-
   ::-webkit-scrollbar-track {
     background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    @apply bg-border-default rounded-full;
+    background: rgba(255,255,255,0.1);
+    border-radius: 99px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-zinc-500;
+    background: rgba(255,255,255,0.18);
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
+  /* Selection */
+  ::selection {
+    background: rgba(76,110,245,0.35);
   }
 
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
-
+  /* Date picker icon */
   input[type='date']::-webkit-calendar-picker-indicator {
-    filter: invert(0.5);
+    filter: invert(0.4);
     cursor: pointer;
+  }
+
+  /* Remove number input spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }

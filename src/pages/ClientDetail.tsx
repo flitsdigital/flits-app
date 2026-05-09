@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PageHeader } from "../components/PageHeader";
 import {
   ArrowLeft,
   Edit2,
@@ -141,29 +146,29 @@ export function ClientDetail() {
   }
 
   return (
-    <div className="px-8 py-8 max-w-5xl mx-auto">
-      {/* Breadcrumb */}
-      <Link
-        to="/clients"
-        className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors mb-6"
-      >
-        <ArrowLeft size={14} />
-        Klanten
-      </Link>
+    <div>
+      <PageHeader
+        title={client.companyName}
+        breadcrumbs={[
+          { label: 'Klanten', href: '/clients' },
+          { label: client.companyName },
+        ]}
+      />
+    <div className="px-6 py-5 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent-blue/20 flex items-center justify-center">
-            <span className="text-lg font-bold text-accent-blue">
+      <div className="flex items-start justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-accent-blue/20 flex items-center justify-center">
+            <span className="text-sm font-bold text-accent-blue">
               {client.companyName.charAt(0)}
             </span>
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">
+            <h1 className="text-base font-semibold text-text-primary">
               {client.companyName}
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-0.5">
               <StatusBadge status={client.status} />
               {client.packageType && (
                 <span className="text-xs text-text-muted">
@@ -173,20 +178,14 @@ export function ClientDetail() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setEditing(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary bg-surface-3 hover:bg-surface-4 border border-border-subtle rounded-lg transition-colors"
-          >
-            <Edit2 size={14} />
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="h-7 text-xs gap-1.5">
+            <Edit2 size={13} />
             Bewerken
-          </button>
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-surface-3 hover:bg-red-500/10 border border-border-subtle hover:border-red-500/25 rounded-lg transition-colors"
-          >
-            <Trash2 size={14} />
-          </button>
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setConfirmDelete(true)} className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25">
+            <Trash2 size={13} />
+          </Button>
         </div>
       </div>
 
@@ -271,89 +270,58 @@ export function ClientDetail() {
             </div>
           </div>
 
-          {/* Vorige factuurmomenten */}
+          {/* Vorige factuurmomenten — Accordion */}
           {pastDates.length > 0 && (
-            <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-              <button
-                onClick={() => setHistoryOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {historyOpen ? (
-                    <ChevronDown size={14} className="text-text-muted" />
-                  ) : (
-                    <ChevronRight size={14} className="text-text-muted" />
-                  )}
-                  <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                    Vorige factuurmomenten
-                  </span>
-                  <span className="text-xs text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md">
-                    {
-                      pastDates.filter((d) => {
-                        const key = format(d, "yyyy-MM-dd");
-                        return client.invoiceRecords?.find(
-                          (r) => r.date === key,
-                        )?.invoiced;
-                      }).length
-                    }
-                    /{pastDates.length} gefactureerd
-                  </span>
-                </div>
-              </button>
-
-              {historyOpen && (
-                <div className="border-t border-border-subtle divide-y divide-border-subtle">
-                  {pastDates.map((date, i) => {
-                    const key = format(date, "yyyy-MM-dd");
-                    const record = client.invoiceRecords?.find(
-                      (r) => r.date === key,
-                    );
-                    const invoiced = record?.invoiced ?? false;
-                    return (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => toggleInvoiced(client.id, key)}
-                            className={`w-5 h-5 rounded flex items-center justify-center border transition-colors shrink-0 ${
-                              invoiced
-                                ? "bg-green-500 border-green-500 text-white"
-                                : "border-border-default hover:border-zinc-400 bg-transparent"
-                            }`}
-                          >
-                            {invoiced && <Check size={11} strokeWidth={3} />}
-                          </button>
-                          <div>
-                            <span className="text-sm font-medium text-text-primary">
-                              {formatWeek(date)}
-                            </span>
-                            <span className="text-xs text-text-muted ml-2">
-                              {formatDate(key)}
-                            </span>
+            <Accordion type="single" collapsible className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
+              <AccordionItem value="history" className="border-none">
+                <AccordionTrigger className="px-4 py-2.5 text-left hover:no-underline hover:bg-white/[0.03] [&>svg]:text-text-muted">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                      Vorige factuurmomenten
+                    </span>
+                    <span className="text-xs text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md">
+                      {pastDates.filter(d => {
+                        const key = format(d, 'yyyy-MM-dd')
+                        return client.invoiceRecords?.find(r => r.date === key)?.invoiced
+                      }).length}/{pastDates.length} gefactureerd
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-0">
+                  <div className="border-t border-border-subtle divide-y divide-border-subtle">
+                    {pastDates.map((date, i) => {
+                      const key = format(date, 'yyyy-MM-dd')
+                      const record = client.invoiceRecords?.find(r => r.date === key)
+                      const invoiced = record?.invoiced ?? false
+                      return (
+                        <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => toggleInvoiced(client.id, key)}
+                              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors shrink-0 ${invoiced ? 'bg-green-500 border-green-500 text-white' : 'border-border-default hover:border-zinc-400 bg-transparent'}`}
+                            >
+                              {invoiced && <Check size={11} strokeWidth={3} />}
+                            </button>
+                            <div>
+                              <span className="text-sm font-medium text-text-primary">{formatWeek(date)}</span>
+                              <span className="text-xs text-text-muted ml-2">{formatDate(key)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-text-secondary">€{client.pricePerCycle.toLocaleString('nl-NL')}</span>
+                            {invoiced ? (
+                              <span className="text-xs text-green-400 font-medium">Gefactureerd</span>
+                            ) : (
+                              <span className="text-xs text-text-muted">Niet gefactureerd</span>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-text-secondary">
-                            €{client.pricePerCycle.toLocaleString("nl-NL")}
-                          </span>
-                          {invoiced ? (
-                            <span className="text-xs text-green-400 font-medium">
-                              Gefactureerd
-                            </span>
-                          ) : (
-                            <span className="text-xs text-text-muted">
-                              Niet gefactureerd
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      )
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
 
           {/* Notes */}
@@ -370,7 +338,7 @@ export function ClientDetail() {
 
           {/* Posts */}
           <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                 Content
                 <span className="ml-2 text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md font-normal normal-case tracking-normal">
@@ -382,7 +350,7 @@ export function ClientDetail() {
                   setEditingPost(null);
                   setPostFormOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
               >
                 <Plus size={13} />
                 Post toevoegen
@@ -390,7 +358,7 @@ export function ClientDetail() {
             </div>
 
             {clientPosts.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-text-muted">
+              <div className="px-4 py-8 text-center text-xs text-text-muted">
                 Nog geen posts. Voeg de eerste toe.
               </div>
             )}
@@ -404,11 +372,11 @@ export function ClientDetail() {
                 return (
                   <div
                     key={post.id}
-                    className="flex items-start gap-4 px-5 py-4 hover:bg-white/[0.02] transition-colors group"
+                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors group"
                   >
                     {/* Type icon */}
-                    <div className="w-8 h-8 rounded-lg bg-surface-3 border border-border-subtle flex items-center justify-center shrink-0 mt-0.5">
-                      <Icon size={14} className="text-text-muted" />
+                    <div className="w-6 h-6 rounded bg-surface-3 border border-border-subtle flex items-center justify-center shrink-0 mt-0.5">
+                      <Icon size={12} className="text-text-muted" />
                     </div>
 
                     {/* Content */}
@@ -550,6 +518,7 @@ export function ClientDetail() {
         onClose={() => setEditing(false)}
         onSave={(data) => {
           updateClient(client.id, data);
+          toast.success('Klant bijgewerkt')
           setEditing(false);
         }}
         initial={client}
@@ -566,16 +535,23 @@ export function ClientDetail() {
         onSave={async (data) => {
           if (editingPost) {
             await updatePost(editingPost.id, data);
+            toast.success('Post opgeslagen')
           } else {
             const created = await addPost(data);
+            toast.success('Post aangemaakt')
             setEditingPost(created);
           }
         }}
         onDelete={editingPost ? async () => {
           await deletePost(editingPost.id);
+          toast.success('Post verwijderd')
           setPostFormOpen(false);
           setEditingPost(null);
         } : undefined}
+        onDuplicate={async (data) => {
+          await addPost(data)
+          toast.success('Post gedupliceerd')
+        }}
         initial={editingPost ?? undefined}
         clientId={client.id}
         clients={[client]}
@@ -585,37 +561,21 @@ export function ClientDetail() {
       />
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setConfirmDelete(false)}
-          />
-          <div className="relative z-10 bg-surface-2 border border-border-subtle rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-base font-semibold text-text-primary mb-2">
-              Klant verwijderen?
-            </h3>
-            <p className="text-sm text-text-secondary mb-5">
-              Weet je zeker dat je <strong>{client.companyName}</strong> wilt
-              verwijderen? Dit kan niet ongedaan worden gemaakt.
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="flex-1 px-4 py-2 text-sm text-text-secondary border border-border-subtle rounded-lg hover:bg-surface-3 transition-colors"
-              >
-                Annuleren
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-              >
-                Verwijderen
-              </button>
-            </div>
+      <Dialog open={confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Klant verwijderen?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Weet je zeker dat je <strong className="text-foreground">{client.companyName}</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+          </p>
+          <div className="flex gap-3 mt-2">
+            <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">Annuleren</Button>
+            <Button variant="destructive" onClick={handleDelete} className="flex-1">Verwijderen</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+    </div>
     </div>
   );
 }

@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { Navigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, X, Check, Shield, User } from 'lucide-react'
+import { Plus, Pencil, Trash2, Shield, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { supabaseAdmin } from '../lib/supabase'
 import { useAuthStore } from '../store/useAuthStore'
 import { PageHeader } from '../components/PageHeader'
 import type { UserProfile, AppPage, UserRole } from '../types'
-import clsx from 'clsx'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 
 const PAGE_OPTIONS: { id: AppPage; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -21,10 +29,12 @@ const PAGE_OPTIONS: { id: AppPage; label: string }[] = [
 // ─── User modal ───────────────────────────────────────────────────────────────
 
 function UserModal({
+  open,
   user,
   onClose,
   onSaved,
 }: {
+  open: boolean
   user?: UserProfile
   onClose: () => void
   onSaved: () => void
@@ -37,6 +47,17 @@ function UserModal({
   const [allowedPages, setAllowedPages] = useState<AppPage[]>(user?.allowed_pages ?? ['content'])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setEmail(user?.email ?? '')
+      setName(user?.name ?? '')
+      setPassword('')
+      setRole(user?.role ?? 'default')
+      setAllowedPages(user?.allowed_pages ?? ['content'])
+      setError(null)
+    }
+  }, [open, user])
 
   function togglePage(page: AppPage) {
     setAllowedPages((prev) =>
@@ -96,73 +117,46 @@ function UserModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-text-primary">
-            {isEdit ? 'Account bewerken' : 'Nieuw account'}
-          </h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
-            <X size={16} />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Account bewerken' : 'Nieuw account'}</DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {!isEdit && (
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
-                E-mailadres <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="naam@bedrijf.nl"
-                className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-              />
+            <div className="space-y-1.5">
+              <Label htmlFor="email">E-mailadres <span className="text-destructive">*</span></Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="naam@bedrijf.nl" />
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Naam</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Voornaam achternaam"
-              className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-            />
+          <div className="space-y-1.5">
+            <Label htmlFor="name">Naam</Label>
+            <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Voornaam achternaam" />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="password">
               Wachtwoord{' '}
-              {!isEdit ? (
-                <span className="text-red-400">*</span>
-              ) : (
-                <span className="text-text-muted font-normal">(leeg = niet wijzigen)</span>
-              )}
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required={!isEdit}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-            />
+              {!isEdit
+                ? <span className="text-destructive">*</span>
+                : <span className="text-muted-foreground font-normal">(leeg = niet wijzigen)</span>
+              }
+            </Label>
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required={!isEdit} placeholder="••••••••" />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-2">Rol</label>
+          {/* Rol */}
+          <div className="space-y-2">
+            <Label>Rol</Label>
             <div className="flex gap-2">
               {(['admin', 'default'] as UserRole[]).map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setRole(r)}
-                  className={clsx(
+                  className={cn(
                     'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-sm transition-colors',
                     role === r
                       ? r === 'admin'
@@ -178,76 +172,53 @@ function UserModal({
             </div>
           </div>
 
+          {/* Page access */}
           {role === 'default' && (
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-2">
-                Toegang tot pagina's
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {PAGE_OPTIONS.map(({ id, label }) => {
-                  const on = allowedPages.includes(id)
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => togglePage(id)}
-                      className={clsx(
-                        'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors text-left',
-                        on
-                          ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                          : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
-                      )}
-                    >
-                      <div className={clsx(
-                        'w-4 h-4 rounded flex items-center justify-center border flex-shrink-0',
-                        on ? 'bg-green-500 border-green-500' : 'border-zinc-600'
-                      )}>
-                        {on && <Check size={10} className="text-white" />}
-                      </div>
-                      {label}
-                    </button>
-                  )
-                })}
+            <div className="space-y-2">
+              <Label>Toegang tot pagina's</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {PAGE_OPTIONS.map(({ id, label }) => (
+                  <div key={id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border rounded-md px-3 py-2">
+                    <Label htmlFor={`page-${id}`} className="font-normal cursor-pointer text-sm">{label}</Label>
+                    <Switch
+                      id={`page-${id}`}
+                      checked={allowedPages.includes(id)}
+                      onCheckedChange={() => togglePage(id)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
           <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 border border-border-subtle text-text-secondary hover:text-text-primary hover:bg-white/[0.04] text-sm rounded-lg transition-colors"
-            >
-              Annuleren
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-            >
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuleren</Button>
+            <Button type="submit" disabled={loading} className="flex-1">
               {loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Aanmaken'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 // ─── Delete confirm ───────────────────────────────────────────────────────────
 
 function DeleteConfirm({
+  open,
   user,
   onClose,
   onDeleted,
 }: {
-  user: UserProfile
+  open: boolean
+  user?: UserProfile
   onClose: () => void
   onDeleted: () => void
 }) {
@@ -255,6 +226,7 @@ function DeleteConfirm({
   const [error, setError] = useState<string | null>(null)
 
   async function handleDelete() {
+    if (!user) return
     setLoading(true)
     const { error: err } = await supabaseAdmin.auth.admin.deleteUser(user.id)
     if (err) { setError(err.message); setLoading(false); return }
@@ -263,25 +235,27 @@ function DeleteConfirm({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-sm p-5">
-        <h2 className="text-sm font-semibold text-text-primary mb-1">Account verwijderen</h2>
-        <p className="text-xs text-text-muted mb-4">
-          Weet je zeker dat je <span className="text-text-secondary">{user.email}</span> wil verwijderen?
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Account verwijderen</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Weet je zeker dat je <span className="text-foreground">{user?.email}</span> wil verwijderen?
         </p>
         {error && (
-          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">{error}</p>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">
-            Annuleren
-          </button>
-          <button onClick={handleDelete} disabled={loading} className="flex-1 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+        <div className="flex gap-2 mt-2">
+          <Button variant="outline" onClick={onClose} className="flex-1">Annuleren</Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={loading} className="flex-1">
             {loading ? 'Bezig…' : 'Verwijderen'}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -322,152 +296,139 @@ export function Settings() {
     setPwSuccess(false)
     setPwLoading(true)
     const { error } = await supabase.auth.updateUser({ password: newPassword })
-    if (error) { setPwError(error.message) } else { setPwSuccess(true); setNewPassword('') }
+    if (error) { setPwError(error.message); toast.error('Mislukt', { description: error.message }) }
+    else { setPwSuccess(true); setNewPassword(''); toast.success('Wachtwoord gewijzigd') }
     setPwLoading(false)
   }
 
   return (
     <div>
       <PageHeader title="Instellingen" />
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className="px-6 py-5 max-w-2xl mx-auto">
 
-      {/* Mijn account */}
-      <section className="bg-surface-1 border border-border-subtle rounded-xl mb-4">
-        <div className="px-5 py-4 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-text-primary">Mijn account</h2>
-          <p className="text-xs text-text-muted mt-0.5">{profile?.email}</p>
-        </div>
-        <div className="p-5 space-y-4">
-          <form onSubmit={handleChangePassword} className="space-y-3">
-            <p className="text-xs font-medium text-text-secondary">Wachtwoord wijzigen</p>
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  placeholder="Nieuw wachtwoord"
-                  className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={pwLoading || !newPassword}
-                className="px-4 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {pwLoading ? 'Bezig…' : 'Opslaan'}
-              </button>
-            </div>
-            {pwError && <p className="text-xs text-red-400">{pwError}</p>}
-            {pwSuccess && <p className="text-xs text-green-400">Wachtwoord gewijzigd.</p>}
-          </form>
-
-          <button onClick={() => signOut()} className="text-xs text-red-400 hover:text-red-300 transition-colors">
-            Uitloggen
-          </button>
-        </div>
-      </section>
-
-      {/* Gebruikersbeheer */}
-      <section className="bg-surface-1 border border-border-subtle rounded-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Gebruikers</h2>
-            <p className="text-xs text-text-muted mt-0.5">Beheer accounts en toegang</p>
+        {/* Mijn account */}
+        <section className="bg-surface-1 border border-border-subtle rounded-xl mb-4">
+          <div className="px-5 py-4 border-b border-border-subtle">
+            <h2 className="text-sm font-semibold text-text-primary">Mijn account</h2>
+            <p className="text-xs text-text-muted mt-0.5">{profile?.email}</p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
-          >
-            <Plus size={13} />
-            Nieuw account
-          </button>
-        </div>
-
-        <div className="divide-y divide-border-subtle">
-          {usersLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="w-4 h-4 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : users.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-text-muted text-center">Geen gebruikers.</p>
-          ) : (
-            users.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 px-5 py-3.5">
-                <div className="w-8 h-8 rounded-full bg-surface-0 border border-border-subtle flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-medium text-text-secondary">
-                    {(u.name ?? u.email).charAt(0).toUpperCase()}
-                  </span>
+          <div className="p-5 space-y-4">
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <p className="text-xs font-medium text-text-secondary">Wachtwoord wijzigen</p>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    placeholder="Nieuw wachtwoord"
+                  />
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-text-primary truncate">{u.name ?? u.email}</span>
-                    {u.role === 'admin' ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-blue/15 text-accent-blue border border-accent-blue/30 text-xs">
-                        <Shield size={10} /> Admin
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs">
-                        <User size={10} /> Standaard
-                      </span>
-                    )}
-                    {u.id === profile?.id && <span className="text-xs text-text-muted">(jij)</span>}
-                  </div>
-                  {u.name && <p className="text-xs text-text-muted truncate">{u.email}</p>}
-                  {u.role === 'default' && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {u.allowed_pages.length === 0 ? (
-                        <span className="text-xs text-amber-400/80">Geen toegang</span>
-                      ) : (
-                        u.allowed_pages.map((p) => (
-                          <span key={p} className="text-xs px-1.5 py-0.5 rounded bg-white/[0.05] text-text-muted border border-border-subtle">
-                            {PAGE_OPTIONS.find((o) => o.id === p)?.label ?? p}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setEditUser(u)}
-                    className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-md transition-colors"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  {u.id !== profile?.id && (
-                    <button
-                      onClick={() => setDeleteUser(u)}
-                      className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
+                <Button type="submit" disabled={pwLoading || !newPassword}>
+                  {pwLoading ? 'Bezig…' : 'Opslaan'}
+                </Button>
               </div>
-            ))
-          )}
-        </div>
-      </section>
+              {pwError && <p className="text-xs text-destructive">{pwError}</p>}
+              {pwSuccess && <p className="text-xs text-green-400">Wachtwoord gewijzigd.</p>}
+            </form>
 
-      {(showCreate || editUser) && (
+            <Button variant="destructive" size="sm" onClick={() => signOut()} className="text-xs text-destructive hover:text-destructive">
+              Uitloggen
+            </Button>
+          </div>
+        </section>
+
+        <Separator className="mb-4 bg-border-subtle" />
+
+        {/* Gebruikersbeheer */}
+        <section className="bg-surface-1 border border-border-subtle rounded-xl">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+            <div>
+              <h2 className="text-sm font-semibold text-text-primary">Gebruikers</h2>
+              <p className="text-xs text-text-muted mt-0.5">Beheer accounts en toegang</p>
+            </div>
+            <Button variant="default" size="sm" onClick={() => setShowCreate(true)}>
+              <Plus size={13} />
+              Nieuw account
+            </Button>
+          </div>
+
+          <div className="divide-y divide-border-subtle">
+            {usersLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-4 h-4 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : users.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-text-muted text-center">Geen gebruikers.</p>
+            ) : (
+              users.map((u) => (
+                <div key={u.id} className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
+                  <div className="w-6 h-6 rounded bg-surface-0 border border-border-subtle flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-medium text-text-secondary">
+                      {(u.name ?? u.email).charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-text-primary truncate">{u.name ?? u.email}</span>
+                      {u.role === 'admin' ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-blue/15 text-accent-blue border border-accent-blue/30 text-xs">
+                          <Shield size={10} /> Admin
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs">
+                          <User size={10} /> Standaard
+                        </span>
+                      )}
+                      {u.id === profile?.id && <span className="text-xs text-text-muted">(jij)</span>}
+                    </div>
+                    {u.name && <p className="text-xs text-text-muted truncate">{u.email}</p>}
+                    {u.role === 'default' && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {u.allowed_pages.length === 0 ? (
+                          <span className="text-xs text-amber-400/80">Geen toegang</span>
+                        ) : (
+                          u.allowed_pages.map((p) => (
+                            <span key={p} className="text-xs px-1.5 py-0.5 rounded bg-white/[0.05] text-text-muted border border-border-subtle">
+                              {PAGE_OPTIONS.find((o) => o.id === p)?.label ?? p}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-text-muted hover:text-text-primary" onClick={() => setEditUser(u)}>
+                      <Pencil size={13} />
+                    </Button>
+                    {u.id !== profile?.id && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-text-muted hover:text-destructive" onClick={() => setDeleteUser(u)}>
+                        <Trash2 size={13} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
         <UserModal
+          open={showCreate || !!editUser}
           user={editUser}
           onClose={() => { setShowCreate(false); setEditUser(undefined) }}
           onSaved={() => { loadUsers(); if (editUser?.id === profile?.id) refreshProfile() }}
         />
-      )}
-      {deleteUser && (
         <DeleteConfirm
+          open={!!deleteUser}
           user={deleteUser}
           onClose={() => setDeleteUser(undefined)}
           onDeleted={loadUsers}
         />
-      )}
       </div>
     </div>
   )

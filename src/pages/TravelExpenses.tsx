@@ -8,14 +8,26 @@ import {
   parseISO, isWithinInterval,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check } from 'lucide-react'
-import { supabase, supabaseAdmin, withTimeout } from '../lib/supabase'
+import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check, ChevronsUpDown } from 'lucide-react'
+import { toast } from 'sonner'
+import { travelExpensesDb } from '../lib/travelExpensesDb'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
+import { useTravelExpensesData } from '../hooks/useTravelExpensesData'
 import { PageHeader } from '../components/PageHeader'
 import type { TravelExpense, UserProfile } from '../types'
 import clsx from 'clsx'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { DatePickerButton } from '@/components/ui/date-picker-button'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 
 const RATE = 0.23
 
@@ -160,8 +172,54 @@ function useRoutePresets(userId: string | undefined) {
   return { presets, addPreset, removePreset }
 }
 
-function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { expense?: TravelExpense; initialDate?: string; onClose: () => void; onSaved: () => void; onDelete: (id: string) => void }) {
+function ClientCombobox({ value, onChange, placeholder = '— Geen klant —' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const clients = useStore((s) => s.clients)
+  const [open, setOpen] = useState(false)
+  const selected = clients.find(c => c.id === value)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal text-sm">
+          {selected ? selected.companyName : <span className="text-muted-foreground">{placeholder}</span>}
+          <ChevronsUpDown size={14} className="text-muted-foreground shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Zoek klant..." />
+          <CommandList>
+            <CommandEmpty>Geen klant gevonden.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="" onSelect={() => { onChange(''); setOpen(false) }}>
+                <Check size={14} className={cn('mr-2', value === '' ? 'opacity-100' : 'opacity-0')} />
+                — Geen klant —
+              </CommandItem>
+              {clients.map(c => (
+                <CommandItem key={c.id} value={c.companyName} onSelect={() => { onChange(c.id); setOpen(false) }}>
+                  <Check size={14} className={cn('mr-2', value === c.id ? 'opacity-100' : 'opacity-0')} />
+                  {c.companyName}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TravelDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <DatePickerButton
+      value={value || undefined}
+      onChange={onChange}
+      placeholder="Selecteer datum"
+      className="w-full rounded-md justify-start h-9 text-sm px-3"
+    />
+  )
+}
+
+function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { expense?: TravelExpense; initialDate?: string; onClose: () => void; onSaved: () => void; onDelete: (id: string) => void }) {
   const session = useAuthStore((s) => s.session)
   const { presets, addPreset, removePreset } = useRoutePresets(session?.user.id)
   const isEdit = !!expense
@@ -181,48 +239,40 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
   const total = returnTrip ? km * 2 : km
 
   function applyPreset(p: RoutePreset) {
-    setFrom(p.from)
-    setTo(p.to)
-    setKilometers(p.kilometers.toString())
-    setReturnTrip(p.returnTrip)
+    setFrom(p.from); setTo(p.to); setKilometers(p.kilometers.toString()); setReturnTrip(p.returnTrip)
   }
 
   function handleSavePreset() {
     if (!from || !to || !km) return
     addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
-    setSavingPreset(false)
-    setPresetLabel('')
+    setSavingPreset(false); setPresetLabel('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null); setLoading(true)
-    const row = { client_id: clientId || null, date, from_location: from, to_location: to, return_trip: returnTrip, kilometers: km, updated_at: new Date().toISOString() }
     try {
       if (isEdit) {
-        const { error } = await withTimeout(
-          supabase.from('travel_expenses').update(row).eq('id', expense!.id)
-        )
-        if (error) throw error
+        await travelExpensesDb.updateExpense(expense!.id, { clientId: clientId || null, date, from, to, returnTrip, kilometers: km })
       } else {
-        const { error } = await withTimeout(
-          supabase.from('travel_expenses').insert({ ...row, id: Math.random().toString(36).slice(2, 10), user_id: session?.user.id, created_at: new Date().toISOString() })
-        )
-        if (error) throw error
+        await travelExpensesDb.createExpense({ userId: session?.user.id, clientId: clientId || null, date, from, to, returnTrip, kilometers: km })
       }
+      toast.success(isEdit ? 'Rit opgeslagen' : 'Rit toegevoegd')
       onSaved(); onClose()
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)) }
-    finally { setLoading(false) }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg)
+      toast.error('Opslaan mislukt', { description: msg })
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-text-primary">{isEdit ? 'Rit bewerken' : 'Rit toevoegen'}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Rit bewerken' : 'Rit toevoegen'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Presets */}
           {presets.length > 0 && (
@@ -231,12 +281,8 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
               <div className="flex flex-wrap gap-1.5">
                 {presets.map((p) => (
                   <div key={p.id} className="group flex items-center gap-1 bg-surface-0 border border-border-subtle rounded-lg pl-2.5 pr-1 py-1">
-                    <button type="button" onClick={() => applyPreset(p)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">
-                      {p.label}
-                    </button>
-                    <button type="button" onClick={() => removePreset(p.id)} className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded">
-                      <X size={10} />
-                    </button>
+                    <button type="button" onClick={() => applyPreset(p)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">{p.label}</button>
+                    <button type="button" onClick={() => removePreset(p.id)} className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"><X size={10} /></button>
                   </div>
                 ))}
               </div>
@@ -244,34 +290,37 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
           )}
 
           {/* Datum */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Datum</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors" />
+          <div className="space-y-1.5">
+            <Label>Datum</Label>
+            <TravelDatePicker value={date} onChange={setDate} />
           </div>
 
           {/* Van → Naar */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Van</label>
-              <input type="text" value={from} onChange={(e) => setFrom(e.target.value)} required placeholder="Vertrekpunt" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="from">Van</Label>
+              <Input id="from" value={from} onChange={e => setFrom(e.target.value)} required placeholder="Vertrekpunt" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Naar</label>
-              <input type="text" value={to} onChange={(e) => setTo(e.target.value)} required placeholder="Bestemming" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="to">Naar</Label>
+              <Input id="to" value={to} onChange={e => setTo(e.target.value)} required placeholder="Bestemming" />
             </div>
           </div>
 
           {/* Km + retour */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Km (enkele reis)</label>
-              <input type="number" value={kilometers} onChange={(e) => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="km">Km (enkele reis)</Label>
+              <Input id="km" type="number" value={kilometers} onChange={e => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Retour</label>
-              <button type="button" onClick={() => setReturnTrip((v) => !v)} className={clsx('w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm transition-colors', returnTrip ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-white/[0.04]')}>
-                <RotateCcw size={13} />{returnTrip ? 'Ja' : 'Nee'}
-              </button>
+            <div className="space-y-1.5">
+              <Label>Retourreis</Label>
+              <div className="flex items-center gap-2 h-9">
+                <Switch id="returnTrip" checked={returnTrip} onCheckedChange={setReturnTrip} />
+                <Label htmlFor="returnTrip" className="font-normal cursor-pointer text-muted-foreground">
+                  {returnTrip ? `${km * 2} km totaal` : 'Enkele reis'}
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -279,16 +328,9 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
           {from && to && km > 0 && !isEdit && (
             savingPreset ? (
               <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={presetLabel}
-                  onChange={(e) => setPresetLabel(e.target.value)}
-                  placeholder={`${from} → ${to}`}
-                  autoFocus
-                  className="flex-1 px-3 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-                />
-                <button type="button" onClick={handleSavePreset} className="px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs rounded-lg transition-colors">Opslaan</button>
-                <button type="button" onClick={() => setSavingPreset(false)} className="px-2 py-1.5 text-text-muted hover:text-text-primary transition-colors"><X size={13} /></button>
+                <Input value={presetLabel} onChange={e => setPresetLabel(e.target.value)} placeholder={`${from} → ${to}`} autoFocus className="flex-1 h-8 text-xs" />
+                <Button type="button" size="sm" onClick={handleSavePreset} className="h-8 text-xs">Opslaan</Button>
+                <Button type="button" size="icon" variant="ghost" onClick={() => setSavingPreset(false)} className="h-8 w-8"><X size={13} /></Button>
               </div>
             ) : (
               <button type="button" onClick={() => setSavingPreset(true)} className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
@@ -297,13 +339,10 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
             )
           )}
 
-          {/* Klant (optioneel) */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Klant <span className="text-text-muted font-normal">(optioneel)</span></label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors">
-              <option value="">— Geen klant —</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-            </select>
+          {/* Klant */}
+          <div className="space-y-1.5">
+            <Label>Klant <span className="text-muted-foreground font-normal">(optioneel)</span></Label>
+            <ClientCombobox value={clientId} onChange={setClientId} />
           </div>
 
           {/* Berekening */}
@@ -318,16 +357,16 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
 
           <div className="flex gap-2 pt-1">
             {isEdit && (
-              <button type="button" onClick={() => onDelete(expense!.id)} className="p-2 text-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg border border-border-subtle transition-colors" title="Verwijderen">
+              <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(expense!.id)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                 <Trash2 size={15} />
-              </button>
+              </Button>
             )}
-            <button type="button" onClick={onClose} className="flex-1 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">Annuleren</button>
-            <button type="submit" disabled={loading} className="flex-1 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">{loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Toevoegen'}</button>
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuleren</Button>
+            <Button type="submit" disabled={loading} className="flex-1">{loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Toevoegen'}</Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -364,24 +403,16 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null); setLoading(true)
-    const now = new Date().toISOString()
-    const rows = dates.map((date) => ({
-      id: Math.random().toString(36).slice(2, 10),
-      user_id: session?.user.id,
-      client_id: clientId || null,
-      date,
-      from_location: from,
-      to_location: to,
-      return_trip: returnTrip,
-      kilometers: km,
-      created_at: now,
-      updated_at: now,
-    }))
     try {
-      const { error: err } = await withTimeout(
-        supabase.from('travel_expenses').insert(rows)
-      )
-      if (err) throw err
+      await travelExpensesDb.createBulkExpenses({
+        userId: session?.user.id,
+        clientId: clientId || null,
+        dates,
+        from,
+        to,
+        returnTrip,
+        kilometers: km,
+      })
       onSaved(); onClose()
     } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)) }
     finally { setLoading(false) }
@@ -390,15 +421,12 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
   const sorted = [...dates].sort()
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Rit toevoegen voor {dates.length} datum{dates.length !== 1 ? 's' : ''}</h2>
-            <p className="text-xs text-text-muted mt-0.5">Dezelfde rit wordt opgeslagen voor elke geselecteerde dag</p>
-          </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
-        </div>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rit toevoegen voor {dates.length} datum{dates.length !== 1 ? 's' : ''}</DialogTitle>
+          <p className="text-xs text-muted-foreground">Dezelfde rit wordt opgeslagen voor elke geselecteerde dag</p>
+        </DialogHeader>
 
         {/* Selected dates chips */}
         <div className="px-5 pt-4 flex flex-wrap gap-1.5">
@@ -427,27 +455,30 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
 
           {/* Van → Naar */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Van</label>
-              <input type="text" value={from} onChange={(e) => setFrom(e.target.value)} required placeholder="Vertrekpunt" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-from">Van</Label>
+              <Input id="bulk-from" value={from} onChange={e => setFrom(e.target.value)} required placeholder="Vertrekpunt" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Naar</label>
-              <input type="text" value={to} onChange={(e) => setTo(e.target.value)} required placeholder="Bestemming" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-to">Naar</Label>
+              <Input id="bulk-to" value={to} onChange={e => setTo(e.target.value)} required placeholder="Bestemming" />
             </div>
           </div>
 
           {/* Km + retour */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Km (enkele reis)</label>
-              <input type="number" value={kilometers} onChange={(e) => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-km">Km (enkele reis)</Label>
+              <Input id="bulk-km" type="number" value={kilometers} onChange={e => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">Retour</label>
-              <button type="button" onClick={() => setReturnTrip((v) => !v)} className={clsx('w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm transition-colors', returnTrip ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-white/[0.04]')}>
-                <RotateCcw size={13} />{returnTrip ? 'Ja' : 'Nee'}
-              </button>
+            <div className="space-y-1.5">
+              <Label>Retourreis</Label>
+              <div className="flex items-center gap-2 h-9">
+                <Switch id="bulk-return" checked={returnTrip} onCheckedChange={setReturnTrip} />
+                <Label htmlFor="bulk-return" className="font-normal cursor-pointer text-muted-foreground">
+                  {returnTrip ? `${km * 2} km totaal` : 'Enkele reis'}
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -455,9 +486,9 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
           {from && to && km > 0 && (
             savingPreset ? (
               <div className="flex gap-2 items-center">
-                <input type="text" value={presetLabel} onChange={(e) => setPresetLabel(e.target.value)} placeholder={`${from} → ${to}`} autoFocus className="flex-1 px-3 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors" />
-                <button type="button" onClick={handleSavePreset} className="px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs rounded-lg transition-colors">Opslaan</button>
-                <button type="button" onClick={() => setSavingPreset(false)} className="px-2 py-1.5 text-text-muted hover:text-text-primary transition-colors"><X size={13} /></button>
+                <Input value={presetLabel} onChange={e => setPresetLabel(e.target.value)} placeholder={`${from} → ${to}`} autoFocus className="flex-1 h-8 text-xs" />
+                <Button type="button" size="sm" onClick={handleSavePreset} className="h-8 text-xs">Opslaan</Button>
+                <Button type="button" size="icon" variant="ghost" onClick={() => setSavingPreset(false)} className="h-8 w-8"><X size={13} /></Button>
               </div>
             ) : (
               <button type="button" onClick={() => setSavingPreset(true)} className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
@@ -467,12 +498,9 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
           )}
 
           {/* Klant */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Klant <span className="text-text-muted font-normal">(optioneel)</span></label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors">
-              <option value="">— Geen klant —</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-            </select>
+          <div className="space-y-1.5">
+            <Label>Klant <span className="text-muted-foreground font-normal">(optioneel)</span></Label>
+            <ClientCombobox value={clientId} onChange={setClientId} />
           </div>
 
           {/* Berekening */}
@@ -486,14 +514,14 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
           {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">Annuleren</button>
-            <button type="submit" disabled={loading} className="flex-1 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuleren</Button>
+            <Button type="submit" disabled={loading} className="flex-1">
               {loading ? 'Bezig…' : `${dates.length} rit${dates.length !== 1 ? 'ten' : ''} toevoegen`}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -670,18 +698,6 @@ function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClic
   )
 }
 
-// ─── DB helpers ───────────────────────────────────────────────────────────────
-
-interface DbRow {
-  id: string; user_id: string; client_id: string; date: string; from_location: string
-  to_location: string; return_trip: boolean; kilometers: number
-  created_at: string; updated_at: string
-}
-
-function fromRow(row: DbRow): TravelExpense {
-  return { id: row.id, userId: row.user_id, clientId: row.client_id, date: row.date, from: row.from_location, to: row.to_location, returnTrip: row.return_trip, kilometers: row.kilometers, createdAt: row.created_at, updatedAt: row.updated_at }
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function TravelExpenses() {
@@ -692,8 +708,6 @@ export function TravelExpenses() {
   const now = new Date()
   const presets = PRESETS(now)
 
-  const [expenses, setExpenses] = useState<TravelExpense[]>([])
-  const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [anchorDate, setAnchorDate] = useState<Date>(now) // stable cursor across view switches
   const [range, setRange] = useState<DateRange>(presets[0].range)
@@ -724,37 +738,8 @@ export function TravelExpenses() {
     setSelectedDates(new Set())
   }
 
-  // Admin: user selector
-  const [users, setUsers] = useState<UserProfile[]>([])
   const [selectedUserId, setSelectedUserId] = useState<string | 'all'>('all')
-
-  // Load users for admin
-  useEffect(() => {
-    if (!isAdmin) return
-    supabaseAdmin.from('profiles').select('*').order('email').then(({ data }) => setUsers(data ?? []))
-  }, [isAdmin])
-
-  async function load() {
-    setLoading(true)
-    try {
-      let query = isAdmin
-        ? supabaseAdmin.from('travel_expenses').select('*').order('date', { ascending: false })
-        : supabase.from('travel_expenses').select('*').order('date', { ascending: false })
-
-      if (isAdmin && selectedUserId !== 'all') {
-        query = query.eq('user_id', selectedUserId)
-      }
-
-      const { data } = await withTimeout(query, 15_000)
-      setExpenses((data as DbRow[] ?? []).map(fromRow))
-    } catch {
-      // Toon lege lijst bij timeout / netwerk fout — user ziet het via de lege state
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [selectedUserId])
+  const { users, expenses, loading, load, deleteExpense } = useTravelExpensesData(isAdmin, selectedUserId)
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -772,9 +757,9 @@ export function TravelExpenses() {
   }
 
   async function handleDelete(id: string) {
-    const client = isAdmin ? supabaseAdmin : supabase
-    await withTimeout(client.from('travel_expenses').delete().eq('id', id))
-    setDeleteId(null); load()
+    await deleteExpense(id)
+    setDeleteId(null)
+    toast.success('Rit verwijderd')
   }
 
   function userName(userId: string) {
@@ -818,36 +803,36 @@ export function TravelExpenses() {
               <button
                 onClick={() => setShowExport((v) => !v)}
                 disabled={filtered.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-1 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed text-sm rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed text-xs rounded transition-colors"
               >
-                <Download size={14} /> Exporteren <ChevronDown size={12} />
+                <Download size={12} /> Exporteren <ChevronDown size={11} />
               </button>
               {showExport && (
-                <div className="absolute right-0 top-full mt-1 bg-surface-1 border border-border-subtle rounded-xl shadow-xl z-30 py-1 min-w-[160px]">
-                  <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                    <Sheet size={14} className="text-green-400" /> CSV exporteren
+                <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
+                  <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                    <Sheet size={12} className="text-accent-green" /> CSV exporteren
                   </button>
-                  <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                    <FileText size={14} className="text-red-400" /> PDF exporteren
+                  <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                    <FileText size={12} className="text-accent-red" /> PDF exporteren
                   </button>
                 </div>
               )}
             </div>
             <button
               onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
-              className={clsx('flex items-center gap-1.5 px-3 py-1.5 border text-sm font-medium rounded-lg transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-1 border-border-subtle text-text-secondary hover:text-text-primary')}
+              className={clsx('flex items-center gap-1.5 px-2.5 py-1 border text-xs rounded transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-2 border-border-subtle text-text-secondary hover:text-text-primary')}
             >
-              <CalendarDays size={14} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
+              <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
             </button>
             {!selectMode && (
-              <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-                <Plus size={14} /> Rit toevoegen
+              <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
+                <Plus size={12} /> Rit toevoegen
               </button>
             )}
           </>
         }
       />
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="px-6 py-5 max-w-5xl mx-auto">
 
       {/* Admin: user selector */}
       {isAdmin && (
@@ -875,28 +860,28 @@ export function TravelExpenses() {
       )}
 
       {/* Controls bar */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* Period nav */}
-        <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
-          <button onClick={() => navigate(-1)} className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-md transition-colors">
-            <ChevronLeft size={15} />
+        <div className="flex items-center bg-surface-2 border border-border-subtle rounded p-0.5">
+          <button onClick={() => navigate(-1)} className="p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
+            <ChevronLeft size={13} />
           </button>
-          <span className="text-sm font-medium text-text-primary px-2 min-w-[160px] text-center">{rangeLabel}</span>
-          <button onClick={() => navigate(1)} className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-md transition-colors">
-            <ChevronRight size={15} />
+          <span className="text-xs font-medium text-text-primary px-2 min-w-[140px] text-center">{rangeLabel}</span>
+          <button onClick={() => navigate(1)} className="p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
+            <ChevronRight size={13} />
           </button>
         </div>
 
         {/* Presets dropdown */}
         <div className="relative" ref={presetsRef}>
-          <button onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-3 py-2 bg-surface-1 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">
-            {range.label} <ChevronDown size={13} />
+          <button onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary text-xs rounded transition-colors">
+            {range.label} <ChevronDown size={11} />
           </button>
           {showPresets && (
-            <div className="absolute top-full mt-1 left-0 bg-surface-1 border border-border-subtle rounded-xl shadow-xl z-20 py-1 min-w-[180px]">
+            <div className="absolute top-full mt-1 left-0 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-20 py-1 min-w-[170px]">
               {presets.map((p) => (
                 <button key={p.label} onClick={() => { setRange(p.range); setAnchorDate(p.range.start); setShowPresets(false); if (p.label.includes('week') || p.label === 'Deze week' || p.label === 'Vorige week') setViewMode('week'); else setViewMode('month') }}
-                  className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                  className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
                   {p.label}
                 </button>
               ))}
@@ -905,14 +890,17 @@ export function TravelExpenses() {
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center bg-surface-1 border border-border-subtle rounded-lg p-1 ml-auto">
-          {(['week', 'month'] as ViewMode[]).map((m) => (
-            <button key={m} onClick={() => { setViewMode(m); if (m === 'week') { setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` }) } else { setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) }) } }}
-              className={clsx('px-3 py-1.5 rounded-md text-sm transition-colors', viewMode === m ? 'bg-white/[0.08] text-text-primary font-medium' : 'text-text-muted hover:text-text-secondary')}>
-              {m === 'week' ? 'Week' : 'Maand'}
-            </button>
-          ))}
-        </div>
+        <Tabs value={viewMode} onValueChange={(v) => {
+          const m = v as ViewMode
+          setViewMode(m)
+          if (m === 'week') setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` })
+          else setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) })
+        }} className="ml-auto">
+          <TabsList className="h-7">
+            <TabsTrigger value="week" className="text-xs h-6 px-2.5">Week</TabsTrigger>
+            <TabsTrigger value="month" className="text-xs h-6 px-2.5">Maand</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Stats */}
@@ -930,7 +918,7 @@ export function TravelExpenses() {
       {/* Admin: per-gebruiker breakdown als "alle" geselecteerd */}
       {isAdmin && selectedUserId === 'all' && users.length > 0 && filtered.length > 0 && (
         <div className="bg-surface-1 border border-border-subtle rounded-xl mb-4 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border-subtle">
+          <div className="px-4 py-2.5 border-b border-border-subtle">
             <p className="text-xs font-medium text-text-secondary">Reiskosten per gebruiker</p>
           </div>
           <div className="divide-y divide-border-subtle">
@@ -940,9 +928,9 @@ export function TravelExpenses() {
               const uKm = userExpenses.reduce((s, e) => s + totalKm(e), 0)
               const uAmount = userExpenses.reduce((s, e) => s + amount(e), 0)
               return (
-                <div key={u.id} className="flex items-center justify-between px-5 py-3">
+                <div key={u.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-surface-0 border border-border-subtle flex items-center justify-center">
+                    <div className="w-6 h-6 rounded bg-surface-0 border border-border-subtle flex items-center justify-center">
                       <span className="text-xs font-medium text-text-secondary">{(u.name ?? u.email).charAt(0).toUpperCase()}</span>
                     </div>
                     <span className="text-sm text-text-primary">{u.name ?? u.email}</span>
@@ -971,7 +959,7 @@ export function TravelExpenses() {
       {/* Lijst onder kalender */}
       {filtered.length > 0 && (
         <div className="mt-4 bg-surface-1 border border-border-subtle rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-border-subtle">
+          <div className="px-4 py-2.5 border-b border-border-subtle">
             <p className="text-xs font-medium text-text-secondary">{filtered.length} rit{filtered.length !== 1 ? 'ten' : ''} in deze periode</p>
           </div>
           <div className="divide-y divide-border-subtle">
@@ -979,7 +967,7 @@ export function TravelExpenses() {
               const client = clients.find((c) => c.id === e.clientId)
               const user = isAdmin ? users.find((u) => u.id === e.userId) : null
               return (
-                <div key={e.id} className="flex items-center gap-4 px-5 py-3 hover:bg-white/[0.02] group">
+                <div key={e.id} className="flex items-center gap-4 px-4 py-2.5 hover:bg-white/[0.03] group">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-sm text-text-primary font-medium">{e.from}</span>
@@ -1034,18 +1022,18 @@ export function TravelExpenses() {
       {showBulk && (
         <BulkExpenseModal dates={[...selectedDates]} onClose={() => setShowBulk(false)} onSaved={() => { load(); exitSelectMode() }} />
       )}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-sm p-5">
-            <h2 className="text-sm font-semibold text-text-primary mb-1">Rit verwijderen</h2>
-            <p className="text-xs text-text-muted mb-4">Weet je zeker dat je deze rit wil verwijderen?</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-2 border border-border-subtle text-text-secondary text-sm rounded-lg transition-colors">Annuleren</button>
-              <button onClick={() => handleDelete(deleteId)} className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">Verwijderen</button>
-            </div>
+      <Dialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rit verwijderen</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">Weet je zeker dat je deze rit wil verwijderen?</p>
+          <div className="flex gap-2 mt-2">
+            <Button variant="outline" onClick={() => setDeleteId(null)} className="flex-1">Annuleren</Button>
+            <Button variant="destructive" onClick={() => handleDelete(deleteId!)} className="flex-1">Verwijderen</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
       </div>
     </div>
   )

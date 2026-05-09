@@ -3,23 +3,22 @@ import { useNavigate } from 'react-router-dom'
 import {
   startOfWeek,
   addWeeks,
-  addMonths,
   format,
   differenceInDays,
   parseISO,
-  isWithinInterval,
   startOfDay,
-  endOfMonth,
   startOfMonth,
-  eachWeekOfInterval,
   isSameMonth,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
-import { getInvoiceTimeline, getInvoiceStatus, formatWeek, formatWeekDate } from '../lib/billing'
+import { getInvoiceTimeline, getInvoiceStatus, formatWeek } from '../lib/billing'
 import { PageHeader } from '../components/PageHeader'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Client } from '../types'
+import { cn } from '@/lib/utils'
 
 const COL_WIDTH = 44 // pixels per week column
 const ROW_HEIGHT = 52
@@ -132,24 +131,23 @@ export function Timeline() {
         subtitle="Factuurmomenten"
         actions={
           <>
-            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
-              {(['all', 'active', 'paused'] as const).map((f) => (
-                <button key={f} onClick={() => setFilterStatus(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filterStatus === f ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
-                  {f === 'all' ? 'Alle' : f === 'active' ? 'Actief' : 'Gepauzeerd'}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1 bg-surface-1 border border-border-subtle rounded-lg p-1">
-              {(['weeks', 'months'] as ViewMode[]).map((v) => (
-                <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === v ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
-                  {v === 'weeks' ? '26 weken' : '52 weken'}
-                </button>
-              ))}
-            </div>
+            <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as 'all' | 'active' | 'paused')}>
+              <TabsList className="h-7">
+                <TabsTrigger value="all" className="text-xs h-6 px-2.5">Alle</TabsTrigger>
+                <TabsTrigger value="active" className="text-xs h-6 px-2.5">Actief</TabsTrigger>
+                <TabsTrigger value="paused" className="text-xs h-6 px-2.5">Gepauzeerd</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList className="h-7">
+                <TabsTrigger value="weeks" className="text-xs h-6 px-2.5">26 weken</TabsTrigger>
+                <TabsTrigger value="months" className="text-xs h-6 px-2.5">52 weken</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </>
         }
       />
-      <div className="px-8 py-6 max-w-full">
+      <div className="px-6 py-5 max-w-full">
 
       {/* Legend */}
       <div className="flex items-center gap-5 mb-5 text-xs text-text-muted">
@@ -261,7 +259,7 @@ export function Timeline() {
                     style={{ width: LABEL_WIDTH }}
                     onClick={() => navigate(`/clients/${client.id}`)}
                   >
-                    <div className="w-6 h-6 rounded-full bg-accent-blue/20 flex items-center justify-center shrink-0">
+                    <div className="w-6 h-6 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
                       <span className="text-xs font-semibold text-accent-blue">
                         {client.companyName.charAt(0)}
                       </span>

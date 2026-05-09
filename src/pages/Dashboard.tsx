@@ -8,31 +8,32 @@ import { getInvoiceStatus, formatWeek, formatWeekDate, formatCycle, calcMonthlyR
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
 import { PageHeader } from '../components/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 function KpiCard({
   label,
   value,
   icon: Icon,
   sub,
-  accent,
 }: {
   label: string
   value: string | number
   icon: React.ElementType
   sub?: string
-  accent?: string
 }) {
   return (
-    <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-sm text-text-secondary">{label}</p>
-        <div className={`p-2 rounded-lg bg-white/[0.04] ${accent ?? ''}`}>
-          <Icon size={16} className="text-text-muted" />
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between mb-3">
+          <p className="text-sm text-text-secondary">{label}</p>
+          <div className="p-2 rounded-lg bg-white/[0.04]">
+            <Icon size={16} className="text-text-muted" />
+          </div>
         </div>
-      </div>
-      <p className="text-2xl font-semibold text-text-primary">{value}</p>
-      {sub && <p className="text-xs text-text-muted mt-1">{sub}</p>}
-    </div>
+        <p className="text-2xl font-semibold text-text-primary">{value}</p>
+        {sub && <p className="text-xs text-text-muted mt-1">{sub}</p>}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -77,135 +78,108 @@ export function Dashboard() {
   return (
     <div>
       <PageHeader title="Dashboard" subtitle={format(new Date(), "EEEE d MMMM yyyy")} />
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-6 py-5 max-w-6xl mx-auto">
 
-      {/* KPI grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <KpiCard
-          label="Actieve klanten"
-          value={stats.active.length}
-          icon={Users}
-          sub={`${stats.paused.length} gepauzeerd`}
-        />
-        <KpiCard
-          label="Effectieve maandomzet"
-          value={`€${Math.round(stats.effectiveMrr).toLocaleString('nl-NL')}`}
-          icon={TrendingUp}
-          sub="Genormaliseerd over alle cycli"
-        />
-        <KpiCard
-          label="Verlopen facturen"
-          value={stats.overdueCount}
-          icon={AlertCircle}
-          sub={stats.overdueCount > 0 ? 'Actie vereist' : 'Alles op orde'}
-        />
-        <KpiCard
-          label="Facturen deze week"
-          value={stats.thisWeekCount}
-          icon={Clock}
-          sub="Komende 7 dagen"
-        />
-        <KpiCard
-          label="Inactieve klanten"
-          value={stats.inactive.length}
-          icon={UserMinus}
-          sub="Churned"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Komende facturen */}
-        <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-            <div className="flex items-center gap-2">
-              <Calendar size={15} className="text-text-muted" />
-              <h2 className="text-sm font-medium text-text-primary">Komende facturen</h2>
-            </div>
-            <Link to="/clients" className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
-              Alle klanten <ArrowRight size={12} />
-            </Link>
-          </div>
-          <div className="divide-y divide-border-subtle">
-            {stats.upcoming.length === 0 && (
-              <div className="px-5 py-8 text-center text-sm text-text-muted">Geen komende facturen</div>
-            )}
-            {stats.upcoming.slice(0, 6).map((c) => {
-              const next = c.nextInvoiceDate ? parseISO(c.nextInvoiceDate) : null
-              const status = next ? getInvoiceStatus(next) : 'ok'
-              return (
-                <Link
-                  key={c.id}
-                  to={`/clients/${c.id}`}
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-accent-blue/20 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-semibold text-accent-blue">
-                        {c.companyName.charAt(0)}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
-                      <p className="text-xs text-text-muted">
-                        {formatWeek(c.nextInvoiceDate)}
-                        <span className="text-text-muted/50 ml-1">· {formatWeekDate(c.nextInvoiceDate)}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    <span className="text-sm font-medium text-text-primary">
-                      €{c.pricePerCycle.toLocaleString('nl-NL')}
-                    </span>
-                    <InvoiceBadge status={status} />
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
+        {/* KPI grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <KpiCard label="Actieve klanten" value={stats.active.length} icon={Users} sub={`${stats.paused.length} gepauzeerd`} />
+          <KpiCard label="Effectieve maandomzet" value={`€${Math.round(stats.effectiveMrr).toLocaleString('nl-NL')}`} icon={TrendingUp} sub="Genormaliseerd over alle cycli" />
+          <KpiCard label="Verlopen facturen" value={stats.overdueCount} icon={AlertCircle} sub={stats.overdueCount > 0 ? 'Actie vereist' : 'Alles op orde'} />
+          <KpiCard label="Facturen deze week" value={stats.thisWeekCount} icon={Clock} sub="Komende 7 dagen" />
+          <KpiCard label="Inactieve klanten" value={stats.inactive.length} icon={UserMinus} sub="Churned" />
         </div>
 
-        {/* Klantenoverzicht */}
-        <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-            <div className="flex items-center gap-2">
-              <Users size={15} className="text-text-muted" />
-              <h2 className="text-sm font-medium text-text-primary">Alle klanten</h2>
-            </div>
-            <Link to="/clients" className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
-              Beheren <ArrowRight size={12} />
-            </Link>
-          </div>
-          <div className="divide-y divide-border-subtle">
-            {recentClients.map((c) => {
-              const next = c.nextInvoiceDate ? parseISO(c.nextInvoiceDate) : null
-              const status = next ? getInvoiceStatus(next) : 'ok'
-              return (
-                <Link
-                  key={c.id}
-                  to={`/clients/${c.id}`}
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-semibold text-purple-400">
-                        {c.companyName.charAt(0)}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
-                      <p className="text-xs text-text-muted">{formatCycle(c.billingCycle, c.customCycleDays)} · {c.packageType}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    {c.status === 'active' && <InvoiceBadge status={status} />}
-                    {c.status !== 'active' && <StatusBadge status={c.status} />}
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Komende facturen */}
+          <Card className="overflow-hidden">
+            <CardHeader className="px-4 py-2.5 border-b border-border-subtle flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Calendar size={14} className="text-text-muted" />
+                Komende facturen
+              </CardTitle>
+              <Link to="/clients" className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
+                Alle klanten <ArrowRight size={11} />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border-subtle">
+                {stats.upcoming.length === 0 && (
+                  <div className="px-4 py-8 text-center text-xs text-text-muted">Geen komende facturen</div>
+                )}
+                {stats.upcoming.slice(0, 6).map((c) => {
+                  const next = c.nextInvoiceDate ? parseISO(c.nextInvoiceDate) : null
+                  const status = next ? getInvoiceStatus(next) : 'ok'
+                  return (
+                    <Link
+                      key={c.id}
+                      to={`/clients/${c.id}`}
+                      className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
+                          <span className="text-xs font-semibold text-accent-blue">{c.companyName.charAt(0)}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
+                          <p className="text-xs text-text-muted">
+                            {formatWeek(c.nextInvoiceDate)}
+                            <span className="text-text-muted/50 ml-1">· {formatWeekDate(c.nextInvoiceDate)}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-sm font-medium text-text-primary">€{c.pricePerCycle.toLocaleString('nl-NL')}</span>
+                        <InvoiceBadge status={status} />
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Klantenoverzicht */}
+          <Card className="overflow-hidden">
+            <CardHeader className="px-4 py-2.5 border-b border-border-subtle flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users size={14} className="text-text-muted" />
+                Alle klanten
+              </CardTitle>
+              <Link to="/clients" className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1">
+                Beheren <ArrowRight size={11} />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border-subtle">
+                {recentClients.map((c) => {
+                  const next = c.nextInvoiceDate ? parseISO(c.nextInvoiceDate) : null
+                  const status = next ? getInvoiceStatus(next) : 'ok'
+                  return (
+                    <Link
+                      key={c.id}
+                      to={`/clients/${c.id}`}
+                      className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 rounded bg-purple-500/20 flex items-center justify-center shrink-0">
+                          <span className="text-xs font-semibold text-purple-400">{c.companyName.charAt(0)}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
+                          <p className="text-xs text-text-muted">{formatCycle(c.billingCycle, c.customCycleDays)} · {c.packageType}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        {c.status === 'active' && <InvoiceBadge status={status} />}
+                        {c.status !== 'active' && <StatusBadge status={c.status} />}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
       </div>
     </div>
   )

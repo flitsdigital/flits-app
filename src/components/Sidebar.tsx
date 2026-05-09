@@ -8,10 +8,15 @@ import {
   Settings,
   LogOut,
   Kanban,
+  Zap,
 } from "lucide-react";
-import clsx from "clsx";
 import { useAuthStore } from "../store/useAuthStore";
 import type { AppPage } from "../types";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 const ALL_NAV: {
   to: string;
@@ -20,49 +25,33 @@ const ALL_NAV: {
   exact: boolean;
   page: AppPage;
 }[] = [
-  {
-    to: "/",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    exact: true,
-    page: "dashboard",
-  },
-  {
-    to: "/clients",
-    label: "Klanten",
-    icon: Users,
-    exact: false,
-    page: "clients",
-  },
-  {
-    to: "/timeline",
-    label: "Timeline",
-    icon: GanttChart,
-    exact: false,
-    page: "timeline",
-  },
-  {
-    to: "/content",
-    label: "Content",
-    icon: CalendarDays,
-    exact: false,
-    page: "content",
-  },
-  {
-    to: "/reiskosten",
-    label: "Reiskosten",
-    icon: Car,
-    exact: false,
-    page: "reiskosten",
-  },
-  {
-    to: "/projects",
-    label: "Projecten",
-    icon: Kanban,
-    exact: false,
-    page: "projects",
-  },
+  { to: "/",           label: "Dashboard", icon: LayoutDashboard, exact: true,  page: "dashboard" },
+  { to: "/clients",    label: "Klanten",   icon: Users,           exact: false, page: "clients"   },
+  { to: "/timeline",   label: "Timeline",  icon: GanttChart,      exact: false, page: "timeline"  },
+  { to: "/content",    label: "Content",   icon: CalendarDays,    exact: false, page: "content"   },
+  { to: "/reiskosten", label: "Reiskosten",icon: Car,             exact: false, page: "reiskosten"},
+  { to: "/projects",   label: "Projecten", icon: Kanban,          exact: false, page: "projects"  },
 ];
+
+function NavItem({ to, label, icon: Icon, exact }: { to: string; label: string; icon: React.ElementType; exact: boolean }) {
+  return (
+    <NavLink
+      to={to}
+      end={exact}
+      className={({ isActive }) =>
+        cn(
+          "group flex items-center gap-2 px-2.5 py-[5px] rounded text-sm transition-colors duration-100",
+          isActive
+            ? "bg-white/[0.08] text-text-primary"
+            : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
+        )
+      }
+    >
+      <Icon size={14} strokeWidth={1.8} className="shrink-0 opacity-70" />
+      <span className="leading-none">{label}</span>
+    </NavLink>
+  );
+}
 
 export function Sidebar() {
   const profile = useAuthStore((s) => s.profile);
@@ -73,78 +62,71 @@ export function Sidebar() {
     ({ page }) => isAdmin || (profile?.allowed_pages ?? []).includes(page),
   );
 
+  const initials = (profile?.name ?? profile?.email ?? "U")
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
-    <aside className="w-56 shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0">
-      {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-border-subtle">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-accent-blue flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-bold">A</span>
+    <aside className="w-[210px] shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0 select-none">
+
+      {/* Workspace header */}
+      <div className="h-10 flex items-center px-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="w-5 h-5 rounded bg-yellow-500 flex items-center justify-center shrink-0">
+            <Zap size={11} className="text-yellow-900 fill-yellow-900" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-text-primary leading-none">
-              Agency CRM
-            </p>
-            <p className="text-[11px] text-text-muted mt-0.5">Social Media</p>
-          </div>
+          <span className="text-sm font-semibold text-text-primary truncate leading-none">
+            Flits Impact
+          </span>
         </div>
       </div>
+      <Separator className="bg-border-subtle" />
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {nav.map(({ to, label, icon: Icon, exact }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={exact}
-            className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                isActive
-                  ? "bg-white/[0.07] text-text-primary font-medium"
-                  : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
-              )
-            }
-          >
-            <Icon size={16} strokeWidth={1.8} />
-            {label}
-          </NavLink>
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-px scrollbar-none">
+        {nav.map((item) => (
+          <NavItem key={item.to} {...item} />
         ))}
       </nav>
 
-      {/* Bottom */}
-      <div className="px-3 py-4 border-t border-border-subtle space-y-0.5">
-        {/* Alleen admin ziet Instellingen */}
+      {/* Bottom: settings + user */}
+      <Separator className="bg-border-subtle" />
+      <div className="px-2 py-2 space-y-px">
         {isAdmin && (
-          <NavLink
-            to="/settings"
-            className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                isActive
-                  ? "bg-white/[0.07] text-text-primary font-medium"
-                  : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
-              )
-            }
-          >
-            <Settings size={16} strokeWidth={1.8} />
-            Instellingen
-          </NavLink>
+          <NavItem to="/settings" label="Instellingen" icon={Settings} exact={false} />
         )}
 
-        {/* Naam + uitloggen */}
-        {profile?.name && (
-          <p className="px-3 pt-1 text-xs text-text-muted truncate">
-            {profile.name}
-          </p>
-        )}
-        <button
-          onClick={() => signOut()}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors"
-        >
-          <LogOut size={16} strokeWidth={1.8} />
-          Uitloggen
-        </button>
+        {/* User row */}
+        <div className="flex items-center gap-2 px-2.5 py-[5px] mt-1">
+          <Avatar className="w-5 h-5 text-2xs shrink-0">
+            <AvatarFallback className="bg-surface-4 text-text-secondary border border-border-default text-2xs font-semibold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-sm text-text-secondary truncate flex-1 leading-none">
+            {profile?.name ?? profile?.email ?? ""}
+          </span>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => signOut()}
+                  className="h-6 w-6 text-text-muted hover:text-text-secondary"
+                >
+                  <LogOut size={12} strokeWidth={1.8} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Uitloggen</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
     </aside>
   );

@@ -2,13 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react'
 import {
   Plus, ChevronLeft, X, Trash2, Check, Flag,
   Folder, Circle, CircleDot, Eye, CheckCircle2,
-  LayoutGrid, List, ChevronDown,
+  LayoutGrid, List, ChevronDown, ChevronsUpDown,
 } from 'lucide-react'
-import { supabaseAdmin } from '../lib/supabase'
+import { projectsDb } from '../lib/projectsDb'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
+import { useProjectsData } from '../hooks/useProjectsData'
 import clsx from 'clsx'
 import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus } from '../types'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { DatePickerButton } from '@/components/ui/date-picker-button'
+import { Command, CommandEmpty, CommandGroup, CommandInput as CommandSearchInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { PillDropdown } from '@/components/ui/pill-dropdown'
+import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -42,35 +56,55 @@ const PROJECT_STATUS_CONFIG: Record<ProjectStatus, { label: string; cls: string 
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapProject(r: any): Project {
-  return {
-    id: r.id, clientId: r.client_id, name: r.name,
-    description: r.description, status: r.status,
-    color: r.color ?? '#3b82f6', createdAt: r.created_at, updatedAt: r.updated_at,
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapTask(r: any): Task {
-  return {
-    id: r.id, projectId: r.project_id, title: r.title,
-    description: r.description, status: r.status, priority: r.priority,
-    assigneeId: r.assignee_id, dueDate: r.due_date,
-    position: r.position, createdAt: r.created_at, updatedAt: r.updated_at,
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSubtask(r: any): Subtask {
-  return {
-    id: r.id, taskId: r.task_id, title: r.title,
-    done: r.done, position: r.position,
-    createdAt: r.created_at, updatedAt: r.updated_at,
-  }
-}
-
 interface UserProfile { id: string; email: string; name?: string | null }
+
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+function ProjectClientCombobox({ value, onChange, clients }: { value: string; onChange: (v: string) => void; clients: { id: string; companyName: string }[] }) {
+  const [open, setOpen] = useState(false)
+  const selected = clients.find(c => c.id === value)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
+          {selected ? selected.companyName : <span className="text-muted-foreground">Selecteer klant...</span>}
+          <ChevronsUpDown size={14} className="text-muted-foreground shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandSearchInput placeholder="Zoek klant..." />
+          <CommandList>
+            <CommandEmpty>Geen klant gevonden.</CommandEmpty>
+            <CommandGroup>
+              {clients.map(c => (
+                <CommandItem key={c.id} value={c.companyName} onSelect={() => { onChange(c.id); setOpen(false) }}>
+                  <Check size={14} className={cn('mr-2', value === c.id ? 'opacity-100' : 'opacity-0')} />
+                  {c.companyName}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TaskDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isOverdue = value && new Date(value + 'T00:00:00') < new Date()
+  return (
+    <DatePickerButton
+      value={value || undefined}
+      onChange={onChange}
+      placeholder="Deadline"
+      className={clsx(
+        'rounded-md border-border-subtle bg-white/[0.04] hover:bg-white/[0.08]',
+        isOverdue ? 'text-red-400 [&_svg]:text-red-400' : ''
+      )}
+    />
+  )
+}
 
 // ── Project Modal ──────────────────────────────────────────────────────────────
 
@@ -100,20 +134,16 @@ function ProjectModal({
     if (!name.trim() || !selectedClient) return
     setLoading(true); setError(null)
     try {
-      const payload = {
-        client_id: selectedClient, name: name.trim(),
-        description: description.trim() || null, status, color,
-        updated_at: new Date().toISOString(),
-      }
-      if (isEdit) {
-        const { data, error: err } = await supabaseAdmin.from('projects').update(payload as never).eq('id', project!.id).select().single()
-        if (err) throw err
-        onSaved(mapProject(data))
-      } else {
-        const { data, error: err } = await supabaseAdmin.from('projects').insert(payload as never).select().single()
-        if (err) throw err
-        onSaved(mapProject(data))
-      }
+      const saved = await projectsDb.saveProject({
+        id: project?.id,
+        clientId: selectedClient,
+        name: name.trim(),
+        description: description.trim() || null,
+        status,
+        color,
+      })
+      toast.success(isEdit ? 'Project opgeslagen' : 'Project aangemaakt')
+      onSaved(saved)
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -125,52 +155,42 @@ function ProjectModal({
   async function handleDelete() {
     if (!project) return
     setLoading(true)
-    const { error: err } = await supabaseAdmin.from('projects').delete().eq('id', project.id)
-    if (err) { setError(err.message); setLoading(false); return }
+    try {
+      await projectsDb.deleteProject(project.id)
+      toast.success('Project verwijderd')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+      setLoading(false)
+      return
+    }
     onDeleted?.(project.id)
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-border-subtle rounded-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-text-primary">{isEdit ? 'Project bewerken' : 'Nieuw project'}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
-        </div>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Project bewerken' : 'Nieuw project'}</DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Client */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Klant <span className="text-red-400">*</span></label>
-            <select
-              value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
-              required
-              className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-blue transition-colors"
-            >
-              <option value="">Selecteer klant...</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-            </select>
+          <div className="space-y-1.5">
+            <Label>Klant <span className="text-destructive">*</span></Label>
+            <ProjectClientCombobox value={selectedClient} onChange={setSelectedClient} clients={clients} />
           </div>
 
           {/* Name */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Projectnaam <span className="text-red-400">*</span></label>
-            <input
-              type="text" value={name} onChange={e => setName(e.target.value)}
-              required placeholder="Bijv. Website redesign"
-              className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors"
-            />
+          <div className="space-y-1.5">
+            <Label htmlFor="proj-name">Projectnaam <span className="text-destructive">*</span></Label>
+            <Input id="proj-name" value={name} onChange={e => setName(e.target.value)} required placeholder="Bijv. Website redesign" />
           </div>
 
           {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Omschrijving</label>
-            <textarea
-              value={description} onChange={e => setDescription(e.target.value)}
-              rows={2} placeholder="Optionele beschrijving..."
-              className="w-full px-3 py-2 bg-surface-0 border border-border-subtle rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition-colors resize-none"
-            />
+          <div className="space-y-1.5">
+            <Label htmlFor="proj-desc">Omschrijving</Label>
+            <Textarea id="proj-desc" value={description ?? ''} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Optionele beschrijving..." className="resize-none" />
           </div>
 
           {/* Status */}
@@ -218,79 +238,25 @@ function ProjectModal({
                   <button type="button" onClick={() => setDeleteConfirm(false)} className="text-text-muted hover:text-text-primary">Nee</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => setDeleteConfirm(true)} className="text-xs text-text-muted hover:text-red-400 flex items-center gap-1 transition-colors">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteConfirm(true)} className="text-xs text-muted-foreground hover:text-destructive gap-1">
                   <Trash2 size={12} /> Verwijderen
-                </button>
+                </Button>
               )
             )}
             <div className="flex gap-2 ml-auto">
-              <button type="button" onClick={onClose} className="px-4 py-2 border border-border-subtle text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors">
-                Annuleren
-              </button>
-              <button type="submit" disabled={loading || !name.trim() || !selectedClient} className="px-4 py-2 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+              <Button type="button" variant="outline" onClick={onClose}>Annuleren</Button>
+              <Button type="submit" disabled={loading || !name.trim() || !selectedClient}>
                 {loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Aanmaken'}
-              </button>
+              </Button>
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 // ── Pill dropdown ──────────────────────────────────────────────────────────────
-
-function PillDropdown<T extends string>({
-  options, value, onChange, renderLabel, renderOption,
-}: {
-  options: T[]
-  value: T
-  onChange: (v: T) => void
-  renderLabel: (v: T) => React.ReactNode
-  renderOption: (v: T) => React.ReactNode
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = React.useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-subtle bg-white/[0.04] hover:bg-white/[0.08] text-xs text-text-secondary hover:text-text-primary transition-colors"
-      >
-        {renderLabel(value)}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-xl shadow-black/40 py-1 z-10 min-w-[130px]">
-          {options.map(opt => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => { onChange(opt); setOpen(false) }}
-              className={clsx(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/[0.06] transition-colors text-left',
-                opt === value ? 'text-text-primary' : 'text-text-secondary'
-              )}
-            >
-              {renderOption(opt)}
-              {opt === value && <Check size={10} className="ml-auto text-accent-blue" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Task Modal ─────────────────────────────────────────────────────────────────
 
@@ -323,28 +289,26 @@ function TaskModal({
   }, [])
 
   async function loadSubtasks() {
-    const { data } = await supabaseAdmin.from('subtasks').select('*').eq('task_id', task!.id).order('position')
-    setSubtasks((data ?? []).map(mapSubtask))
+    const data = await projectsDb.fetchTaskSubtasks(task!.id)
+    setSubtasks(data)
   }
 
   async function handleSubmit() {
     if (!title.trim()) return
     setLoading(true); setError(null)
     try {
-      const payload = {
-        title: title.trim(), description: description.trim() || null,
-        status, priority, assignee_id: assigneeId || null,
-        due_date: dueDate || null, updated_at: new Date().toISOString(),
-      }
-      if (isEdit) {
-        const { data, error: err } = await supabaseAdmin.from('tasks').update(payload as never).eq('id', task!.id).select().single()
-        if (err) throw err
-        onSaved(mapTask(data))
-      } else {
-        const { data, error: err } = await supabaseAdmin.from('tasks').insert({ ...payload, project_id: projectId, position: 0 } as never).select().single()
-        if (err) throw err
-        onSaved(mapTask(data))
-      }
+      const saved = await projectsDb.saveTask({
+        id: task?.id,
+        projectId,
+        title: title.trim(),
+        description: description.trim() || null,
+        status,
+        priority,
+        assigneeId: assigneeId || null,
+        dueDate: dueDate || null,
+        position: 0,
+      })
+      onSaved(saved)
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -355,28 +319,34 @@ function TaskModal({
 
   async function handleDelete() {
     if (!task) return; setLoading(true)
-    const { error: err } = await supabaseAdmin.from('tasks').delete().eq('id', task.id)
-    if (err) { setError(err.message); setLoading(false); return }
+    try {
+      await projectsDb.deleteTask(task.id)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+      setLoading(false)
+      return
+    }
     onDeleted?.(task.id); onClose()
   }
 
   async function addSubtask() {
     if (!newSubtask.trim() || !task) return
-    const { data, error: err } = await supabaseAdmin.from('subtasks')
-      .insert({ task_id: task.id, title: newSubtask.trim(), position: subtasks.length } as never)
-      .select().single()
-    if (err) return
-    setSubtasks(prev => [...prev, mapSubtask(data)])
+    try {
+      const data = await projectsDb.addSubtask(task.id, newSubtask.trim(), subtasks.length)
+      setSubtasks(prev => [...prev, data])
+    } catch {
+      return
+    }
     setNewSubtask('')
   }
 
   async function toggleSubtask(s: Subtask) {
-    await supabaseAdmin.from('subtasks').update({ done: !s.done } as never).eq('id', s.id)
+    await projectsDb.toggleSubtaskDone(s.id, !s.done)
     setSubtasks(prev => prev.map(x => x.id === s.id ? { ...x, done: !x.done } : x))
   }
 
   async function deleteSubtask(id: string) {
-    await supabaseAdmin.from('subtasks').delete().eq('id', id)
+    await projectsDb.deleteSubtask(id)
     setSubtasks(prev => prev.filter(s => s.id !== id))
   }
 
@@ -384,19 +354,17 @@ function TaskModal({
   const assignee = profiles.find(p => p.id === assigneeId)
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div
-        className="bg-[#1a1a1e] border border-border-subtle rounded-xl w-full max-w-xl shadow-2xl shadow-black/60 flex flex-col max-h-[85vh]"
-        onClick={e => e.stopPropagation()}
-      >
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-xl p-0 gap-0 flex flex-col max-h-[85vh] overflow-hidden [&>button]:hidden">
+        <DialogTitle className="sr-only">{isEdit ? 'Taak bewerken' : 'Nieuwe taak'}</DialogTitle>
         {/* Top bar */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-subtle">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-subtle shrink-0">
           <span className="text-xs text-text-muted">Projecten</span>
           <span className="text-text-muted">›</span>
           <span className="text-xs text-text-muted">{isEdit ? 'Taak bewerken' : 'Nieuwe taak'}</span>
-          <button onClick={onClose} className="ml-auto text-text-muted hover:text-text-primary transition-colors p-0.5 rounded hover:bg-white/[0.06]">
+          <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto h-6 w-6 text-text-muted">
             <X size={15} />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -498,38 +466,22 @@ function TaskModal({
 
           {/* Assignee pill */}
           <PillDropdown<string>
-            options={['', ...profiles.map(p => p.id)]}
-            value={assigneeId}
-            onChange={setAssigneeId}
+            options={['__none__', ...profiles.map(p => p.id)]}
+            value={assigneeId || '__none__'}
+            onChange={(v) => setAssigneeId(v === '__none__' ? '' : v)}
             renderLabel={() => assignee
               ? <><div className="w-4 h-4 rounded-full bg-accent-blue/25 flex items-center justify-center text-[9px] font-bold text-accent-blue">{(assignee.name ?? assignee.email).charAt(0).toUpperCase()}</div><span>{assignee.name ?? assignee.email.split('@')[0]}</span></>
               : <><div className="w-4 h-4 rounded-full border border-dashed border-zinc-600" /><span className="text-zinc-500">Niemand</span></>
             }
             renderOption={id => {
-              if (!id) return <><div className="w-4 h-4 rounded-full border border-dashed border-zinc-600" /><span>Niemand</span></>
+              if (id === '__none__') return <><div className="w-4 h-4 rounded-full border border-dashed border-zinc-600" /><span>Niemand</span></>
               const p = profiles.find(x => x.id === id)!
               return <><div className="w-4 h-4 rounded-full bg-accent-blue/25 flex items-center justify-center text-[9px] font-bold text-accent-blue">{(p.name ?? p.email).charAt(0).toUpperCase()}</div><span>{p.name ?? p.email.split('@')[0]}</span></>
             }}
           />
 
           {/* Due date */}
-          <div className="relative">
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full"
-            />
-            <div className={clsx(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-subtle bg-white/[0.04] text-xs cursor-pointer hover:bg-white/[0.08] transition-colors',
-              dueDate ? 'text-text-secondary' : 'text-zinc-500'
-            )}>
-              <Flag size={11} className={dueDate && new Date(dueDate) < new Date() ? 'text-red-400' : 'text-zinc-500'} />
-              {dueDate
-                ? new Date(dueDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
-                : 'Deadline'}
-            </div>
-          </div>
+          <TaskDatePicker value={dueDate} onChange={setDueDate} />
 
           {/* Error */}
           {error && <span className="text-xs text-red-400 ml-1">{error}</span>}
@@ -544,24 +496,24 @@ function TaskModal({
                   <button type="button" onClick={() => setDeleteConfirm(false)} className="text-text-muted">Nee</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => setDeleteConfirm(true)}
-                  className="text-xs text-zinc-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-white/[0.04]">
+                <Button type="button" variant="ghost" size="icon" onClick={() => setDeleteConfirm(true)} className="h-7 w-7 text-zinc-600 hover:text-destructive">
                   <Trash2 size={13} />
-                </button>
+                </Button>
               )
             )}
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={handleSubmit}
               disabled={loading || !title.trim()}
-              className="px-3.5 py-1.5 bg-accent-blue hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+              className="h-7 text-xs"
             >
               {loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Taak aanmaken'}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1073,20 +1025,24 @@ export function Projects() {
   usePageMeta('Projecten → Flits Impact', 'Beheer projecten en taken per klant in kanban of lijstweergave.')
   const clients = useStore(s => s.clients)
 
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
-  const [profiles, setProfiles] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    projects, setProjects,
+    tasks, setTasks,
+    taskCounts, setTaskCounts,
+    profiles,
+    loading,
+    allTasks, setAllTasks,
+    allTasksLoading,
+    loadAll,
+    loadProjectTasks,
+    loadAllTasks,
+    updateTaskStatus,
+  } = useProjectsData()
 
   // Navigation state
   const [leftNav, setLeftNav] = useState<'projects' | 'overview'>('projects')
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-
-  // All-tasks overview
-  const [allTasks, setAllTasks] = useState<Task[]>([])
-  const [allTasksLoading, setAllTasksLoading] = useState(false)
 
   // View toggle
   const [boardView, setBoardView] = useState<'kanban' | 'list'>('kanban')
@@ -1097,41 +1053,6 @@ export function Projects() {
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [editTask, setEditTask] = useState<Task | undefined>()
   const [taskDefaultStatus, setTaskDefaultStatus] = useState<TaskStatus>('todo')
-
-  // Load on mount
-  useEffect(() => { loadAll() }, [])
-
-  async function loadAll() {
-    setLoading(true)
-    const [{ data: projData }, { data: taskData }, { data: profileData }] = await Promise.all([
-      supabaseAdmin.from('projects').select('*').order('created_at', { ascending: false }),
-      supabaseAdmin.from('tasks').select('id, project_id').order('created_at'),
-      supabaseAdmin.from('profiles').select('id, email, name').order('created_at'),
-    ])
-    const ps = (projData ?? []).map(mapProject)
-    setProjects(ps)
-    setProfiles(profileData ?? [])
-
-    // Build task count map
-    const counts: Record<string, number> = {}
-    ;(taskData ?? []).forEach((t: { id: string; project_id: string }) => {
-      counts[t.project_id] = (counts[t.project_id] ?? 0) + 1
-    })
-    setTaskCounts(counts)
-    setLoading(false)
-  }
-
-  async function loadProjectTasks(projectId: string) {
-    const { data } = await supabaseAdmin.from('tasks').select('*').eq('project_id', projectId).order('position')
-    setTasks((data ?? []).map(mapTask))
-  }
-
-  async function loadAllTasks() {
-    setAllTasksLoading(true)
-    const { data } = await supabaseAdmin.from('tasks').select('*').order('created_at', { ascending: false })
-    setAllTasks((data ?? []).map(mapTask))
-    setAllTasksLoading(false)
-  }
 
   function openOverview() {
     setLeftNav('overview')
@@ -1180,10 +1101,7 @@ export function Projects() {
   }
 
   async function handleStatusChange(taskId: string, newStatus: TaskStatus) {
-    // Optimistic update
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
-    // Persist
-    await supabaseAdmin.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() } as never).eq('id', taskId)
+    await updateTaskStatus(taskId, newStatus)
   }
 
   // Filtered projects
@@ -1397,13 +1315,10 @@ export function Projects() {
                 </h1>
                 <p className="text-xs text-text-muted mt-0.5">{filteredProjects.length} projecten</p>
               </div>
-              <button
-                onClick={() => { setEditProject(undefined); setShowProjectModal(true) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
-              >
+              <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }}>
                 <Plus size={13} />
                 Nieuw project
-              </button>
+              </Button>
             </div>
 
             <div className="p-6">

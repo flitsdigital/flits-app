@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
-import clsx from 'clsx'
 import type { Client, BillingCycle, ClientStatus } from '../types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Separator } from '@/components/ui/separator'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 type FormData = Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'nextInvoiceDate' | 'lastInvoiceDate'>
 
@@ -30,16 +46,14 @@ interface Props {
   title?: string
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-text-secondary mb-1.5">{label}</label>
+    <div className="space-y-1.5">
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
   )
 }
-
-const inputCls = 'w-full bg-surface-3 border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/30 transition-colors'
 
 export function ClientForm({ open, onClose, onSave, initial, title = 'Nieuwe klant' }: Props) {
   const [form, setForm] = useState<FormData>({ ...defaultForm, ...initial })
@@ -47,8 +61,6 @@ export function ClientForm({ open, onClose, onSave, initial, title = 'Nieuwe kla
   useEffect(() => {
     if (open) setForm({ ...defaultForm, ...initial })
   }, [open, initial])
-
-  if (!open) return null
 
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -60,105 +72,110 @@ export function ClientForm({ open, onClose, onSave, initial, title = 'Nieuwe kla
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl bg-surface-2 rounded-xl border border-border-subtle shadow-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle sticky top-0 bg-surface-2 z-10">
-          <h2 className="text-base font-semibold text-text-primary">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors">
-            <X size={16} />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 pt-2">
           {/* Klantgegevens */}
           <section>
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Klantgegevens</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Klantgegevens</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Bedrijfsnaam *">
-                <input required className={inputCls} value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder="Bloom & Co" />
+              <Field label="Bedrijfsnaam *" htmlFor="companyName">
+                <Input id="companyName" required value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder="Bloom & Co" />
               </Field>
-              <Field label="Contactpersoon">
-                <input className={inputCls} value={form.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Sophie de Vries" />
+              <Field label="Contactpersoon" htmlFor="contactPerson">
+                <Input id="contactPerson" value={form.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Sophie de Vries" />
               </Field>
-              <Field label="E-mail">
-                <input type="email" className={inputCls} value={form.email} onChange={e => set('email', e.target.value)} placeholder="sophie@bedrijf.nl" />
+              <Field label="E-mail" htmlFor="email">
+                <Input id="email" type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="sophie@bedrijf.nl" />
               </Field>
-              <Field label="Telefoonnummer">
-                <input className={inputCls} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-12345678" />
+              <Field label="Telefoonnummer" htmlFor="phone">
+                <Input id="phone" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-12345678" />
               </Field>
-              <Field label="Adres">
-                <input className={inputCls} value={form.address} onChange={e => set('address', e.target.value)} placeholder="Keizersgracht 123, Amsterdam" />
+              <Field label="Adres" htmlFor="address">
+                <Input id="address" value={form.address} onChange={e => set('address', e.target.value)} placeholder="Keizersgracht 123, Amsterdam" />
               </Field>
-              <Field label="BTW nummer">
-                <input className={inputCls} value={form.vatNumber} onChange={e => set('vatNumber', e.target.value)} placeholder="NL123456789B01" />
+              <Field label="BTW nummer" htmlFor="vatNumber">
+                <Input id="vatNumber" value={form.vatNumber} onChange={e => set('vatNumber', e.target.value)} placeholder="NL123456789B01" />
               </Field>
             </div>
             <div className="mt-3">
-              <Field label="Notities">
-                <textarea className={clsx(inputCls, 'resize-none')} rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Interne opmerkingen..." />
+              <Field label="Notities" htmlFor="notes">
+                <Textarea id="notes" rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Interne opmerkingen..." className="resize-none" />
               </Field>
             </div>
           </section>
+
+          <Separator />
 
           {/* Contract */}
           <section>
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Contract</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contract</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Startdatum *">
-                <input required type="date" className={inputCls} value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+              <Field label="Startdatum *" htmlFor="startDate">
+                <Input id="startDate" required type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
               </Field>
-              <Field label="Einddatum (optioneel)">
-                <input type="date" className={inputCls} value={form.endDate ?? ''} onChange={e => set('endDate', e.target.value || undefined)} />
+              <Field label="Einddatum (optioneel)" htmlFor="endDate">
+                <Input id="endDate" type="date" value={form.endDate ?? ''} onChange={e => set('endDate', e.target.value || undefined)} />
               </Field>
               <Field label="Status">
-                <select className={inputCls} value={form.status} onChange={e => set('status', e.target.value as ClientStatus)}>
-                  <option value="active">Actief</option>
-                  <option value="paused">Gepauzeerd</option>
-                  <option value="inactive">Inactief</option>
-                </select>
+                <Select value={form.status} onValueChange={(v) => set('status', v as ClientStatus)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Actief</SelectItem>
+                    <SelectItem value="paused">Gepauzeerd</SelectItem>
+                    <SelectItem value="inactive">Inactief</SelectItem>
+                  </SelectContent>
+                </Select>
               </Field>
-              <Field label="Pakkettype">
-                <input className={inputCls} value={form.packageType} onChange={e => set('packageType', e.target.value)} placeholder="Social Media Full" />
+              <Field label="Pakkettype" htmlFor="packageType">
+                <Input id="packageType" value={form.packageType} onChange={e => set('packageType', e.target.value)} placeholder="Social Media Full" />
               </Field>
             </div>
           </section>
 
+          <Separator />
+
           {/* Facturatie */}
           <section>
-            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Facturatie</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Facturatie</p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Facturatiecyclus">
-                <select className={inputCls} value={form.billingCycle} onChange={e => set('billingCycle', e.target.value as BillingCycle)}>
-                  <option value="6_weeks">6 weken</option>
-                  <option value="4_weeks">4 weken</option>
-                  <option value="monthly">Maandelijks</option>
-                  <option value="custom">Aangepast</option>
-                </select>
+                <Select value={form.billingCycle} onValueChange={(v) => set('billingCycle', v as BillingCycle)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6_weeks">6 weken</SelectItem>
+                    <SelectItem value="4_weeks">4 weken</SelectItem>
+                    <SelectItem value="monthly">Maandelijks</SelectItem>
+                    <SelectItem value="custom">Aangepast</SelectItem>
+                  </SelectContent>
+                </Select>
               </Field>
               {form.billingCycle === 'custom' && (
-                <Field label="Aantal dagen">
-                  <input type="number" min={1} className={inputCls} value={form.customCycleDays ?? ''} onChange={e => set('customCycleDays', parseInt(e.target.value))} placeholder="30" />
+                <Field label="Aantal dagen" htmlFor="customCycleDays">
+                  <Input id="customCycleDays" type="number" min={1} value={form.customCycleDays ?? ''} onChange={e => set('customCycleDays', parseInt(e.target.value))} placeholder="30" />
                 </Field>
               )}
-              <Field label="Prijs per cyclus (€)">
-                <input type="number" min={0} step={0.01} className={inputCls} value={form.pricePerCycle} onChange={e => set('pricePerCycle', parseFloat(e.target.value))} placeholder="1850" />
+              <Field label="Prijs per cyclus (€)" htmlFor="pricePerCycle">
+                <Input id="pricePerCycle" type="number" min={0} step={0.01} value={form.pricePerCycle} onChange={e => set('pricePerCycle', parseFloat(e.target.value))} placeholder="1850" />
               </Field>
             </div>
           </section>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-border-subtle">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors">
-              Annuleren
-            </button>
-            <button type="submit" className="px-4 py-2 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-              Opslaan
-            </button>
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuleren</Button>
+            <Button type="submit">Opslaan</Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
