@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 interface Ctx {
   title: string
@@ -14,17 +14,16 @@ export function PageTitleProvider({ children }: { children: ReactNode }) {
     subtitle: undefined,
   })
 
-  return (
-    <PageTitleContext.Provider
-      value={{
-        title,
-        subtitle,
-        setTitle: (t, s) => setState({ title: t, subtitle: s }),
-      }}
-    >
-      {children}
-    </PageTitleContext.Provider>
+  const setTitle = useCallback((t: string, s?: string) => {
+    setState((prev) => (prev.title === t && prev.subtitle === s ? prev : { title: t, subtitle: s }))
+  }, [])
+
+  const value = useMemo<Ctx>(
+    () => ({ title, subtitle, setTitle }),
+    [title, subtitle, setTitle],
   )
+
+  return <PageTitleContext.Provider value={value}>{children}</PageTitleContext.Provider>
 }
 
 export function usePageTitle(): Ctx {
@@ -38,7 +37,9 @@ export function usePageTitle(): Ctx {
 /** Side-effect hook: zet de titel in de mobile topbar. */
 export function useSetPageTitle(title: string, subtitle?: string) {
   const ctx = useContext(PageTitleContext)
+  const setRef = useRef(ctx?.setTitle)
+  setRef.current = ctx?.setTitle
   useEffect(() => {
-    ctx?.setTitle(title, subtitle)
-  }, [ctx, title, subtitle])
+    setRef.current?.(title, subtitle)
+  }, [title, subtitle])
 }

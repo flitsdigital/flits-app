@@ -8,13 +8,15 @@ import {
   parseISO, isWithinInterval,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check, ChevronsUpDown, MoreHorizontal } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check, ChevronsUpDown, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { travelExpensesDb } from '../lib/travelExpensesDb'
+import { errorMessage } from '../lib/errors'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
 import { useTravelExpensesData } from '../hooks/useTravelExpensesData'
+import { useTravelRoutePresets } from '../hooks/useTravelRoutePresets'
 import { useIsMobile } from '../hooks/useBreakpoint'
 import { PageHeader } from '../components/PageHeader'
 import type { TravelExpense, UserProfile } from '../types'
@@ -144,37 +146,6 @@ const PRESETS = (now: Date): { label: string; range: DateRange }[] => [
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-interface RoutePreset {
-  id: string
-  label: string
-  from: string
-  to: string
-  kilometers: number
-  returnTrip: boolean
-}
-
-function useRoutePresets(userId: string | undefined) {
-  const key = `route-presets-${userId ?? 'anon'}`
-  const [presets, setPresets] = useState<RoutePreset[]>(() => {
-    try { return JSON.parse(localStorage.getItem(key) ?? '[]') } catch { return [] }
-  })
-
-  function save(updated: RoutePreset[]) {
-    setPresets(updated)
-    localStorage.setItem(key, JSON.stringify(updated))
-  }
-
-  function addPreset(p: Omit<RoutePreset, 'id'>) {
-    save([...presets, { ...p, id: Math.random().toString(36).slice(2, 8) }])
-  }
-
-  function removePreset(id: string) {
-    save(presets.filter((p) => p.id !== id))
-  }
-
-  return { presets, addPreset, removePreset }
-}
-
 function ClientCombobox({ value, onChange, placeholder = '— Geen klant —' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const clients = useStore((s) => s.clients)
   const [open, setOpen] = useState(false)
@@ -224,7 +195,7 @@ function TravelDatePicker({ value, onChange }: { value: string; onChange: (v: st
 
 function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { expense?: TravelExpense; initialDate?: string; onClose: () => void; onSaved: () => void; onDelete: (id: string) => void }) {
   const session = useAuthStore((s) => s.session)
-  const { presets, addPreset, removePreset } = useRoutePresets(session?.user.id)
+  const { presets, loading: presetsLoading, addPreset, removePreset } = useTravelRoutePresets(session?.user.id)
   const isEdit = !!expense
 
   const [clientId, setClientId] = useState(expense?.clientId ?? '')
@@ -241,29 +212,38 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
   const km = parseFloat(kilometers) || 0
   const total = returnTrip ? km * 2 : km
 
-  function applyPreset(p: RoutePreset) {
+  function applyPreset(p: { from: string; to: string; kilometers: number; returnTrip: boolean }) {
     setFrom(p.from); setTo(p.to); setKilometers(p.kilometers.toString()); setReturnTrip(p.returnTrip)
   }
 
-  function handleSavePreset() {
+  async function handleSavePreset() {
     if (!from || !to || !km) return
-    addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
-    setSavingPreset(false); setPresetLabel('')
+    try {
+      await addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
+      setSavingPreset(false); setPresetLabel('')
+    } catch (err: unknown) {
+      toast.error('Route opslaan mislukt', { description: errorMessage(err) })
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!isEdit && !session?.user.id) {
+      const msg = 'Sessie nog niet geladen. Probeer het over een paar seconden opnieuw.'
+      setError(msg); toast.error('Niet ingelogd', { description: msg })
+      return
+    }
     setError(null); setLoading(true)
     try {
       if (isEdit) {
         await travelExpensesDb.updateExpense(expense!.id, { clientId: clientId || null, date, from, to, returnTrip, kilometers: km })
       } else {
-        await travelExpensesDb.createExpense({ userId: session?.user.id, clientId: clientId || null, date, from, to, returnTrip, kilometers: km })
+        await travelExpensesDb.createExpense({ userId: session!.user.id, clientId: clientId || null, date, from, to, returnTrip, kilometers: km })
       }
       toast.success(isEdit ? 'Rit opgeslagen' : 'Rit toegevoegd')
       onSaved(); onClose()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err)
       setError(msg)
       toast.error('Opslaan mislukt', { description: msg })
     } finally { setLoading(false) }
@@ -277,6 +257,9 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
 
+          {presetsLoading && presets.length === 0 && (
+            <p className="text-xs text-muted-foreground">Snelle routes laden…</p>
+          )}
           {/* Presets */}
           {presets.length > 0 && (
             <div>
@@ -285,7 +268,19 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
                 {presets.map((p) => (
                   <div key={p.id} className="group flex items-center gap-1 bg-surface-0 border border-border-subtle rounded-lg pl-2.5 pr-1 py-1">
                     <button type="button" onClick={() => applyPreset(p)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">{p.label}</button>
-                    <button type="button" onClick={() => removePreset(p.id)} className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"><X size={10} /></button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await removePreset(p.id)
+                        } catch (err: unknown) {
+                          toast.error('Route verwijderen mislukt', { description: errorMessage(err) })
+                        }
+                      }}
+                      className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"
+                    >
+                      <X size={10} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -378,7 +373,7 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
 function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClose: () => void; onSaved: () => void }) {
   const clients = useStore((s) => s.clients)
   const session = useAuthStore((s) => s.session)
-  const { presets, addPreset, removePreset } = useRoutePresets(session?.user.id)
+  const { presets, loading: presetsLoading, addPreset, removePreset } = useTravelRoutePresets(session?.user.id)
 
   const [clientId, setClientId] = useState('')
   const [from, setFrom] = useState('')
@@ -393,22 +388,31 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
   const km = parseFloat(kilometers) || 0
   const total = returnTrip ? km * 2 : km
 
-  function applyPreset(p: RoutePreset) {
+  function applyPreset(p: { from: string; to: string; kilometers: number; returnTrip: boolean }) {
     setFrom(p.from); setTo(p.to); setKilometers(p.kilometers.toString()); setReturnTrip(p.returnTrip)
   }
 
-  function handleSavePreset() {
+  async function handleSavePreset() {
     if (!from || !to || !km) return
-    addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
-    setSavingPreset(false); setPresetLabel('')
+    try {
+      await addPreset({ label: presetLabel || `${from} → ${to}`, from, to, kilometers: km, returnTrip })
+      setSavingPreset(false); setPresetLabel('')
+    } catch (err: unknown) {
+      toast.error('Route opslaan mislukt', { description: errorMessage(err) })
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!session?.user.id) {
+      const msg = 'Sessie nog niet geladen. Probeer het over een paar seconden opnieuw.'
+      setError(msg); toast.error('Niet ingelogd', { description: msg })
+      return
+    }
     setError(null); setLoading(true)
     try {
       await travelExpensesDb.createBulkExpenses({
-        userId: session?.user.id,
+        userId: session.user.id,
         clientId: clientId || null,
         dates,
         from,
@@ -417,8 +421,11 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
         kilometers: km,
       })
       onSaved(); onClose()
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)) }
-    finally { setLoading(false) }
+    } catch (err: unknown) {
+      const msg = errorMessage(err)
+      setError(msg)
+      toast.error('Opslaan mislukt', { description: msg })
+    } finally { setLoading(false) }
   }
 
   const sorted = [...dates].sort()
@@ -441,6 +448,9 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {presetsLoading && presets.length === 0 && (
+            <p className="text-xs text-muted-foreground">Snelle routes laden…</p>
+          )}
           {/* Presets */}
           {presets.length > 0 && (
             <div>
@@ -449,7 +459,19 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
                 {presets.map((p) => (
                   <div key={p.id} className="group flex items-center gap-1 bg-surface-0 border border-border-subtle rounded-lg pl-2.5 pr-1 py-1">
                     <button type="button" onClick={() => applyPreset(p)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">{p.label}</button>
-                    <button type="button" onClick={() => removePreset(p.id)} className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"><X size={10} /></button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await removePreset(p.id)
+                        } catch (err: unknown) {
+                          toast.error('Route verwijderen mislukt', { description: errorMessage(err) })
+                        }
+                      }}
+                      className="p-0.5 text-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded"
+                    >
+                      <X size={10} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -901,65 +923,115 @@ export function TravelExpenses() {
     ? `${format(range.start, 'd MMM', { locale: nl })} – ${format(range.end, 'd MMM yyyy', { locale: nl })}`
     : format(range.start, 'MMMM yyyy', { locale: nl })
 
+  const periodToolbar = (
+    <>
+      <div className="flex items-center bg-surface-2 border border-border-subtle rounded-md shrink-0">
+        <button type="button" onClick={() => navigate(-1)} className="p-1.5 lg:p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-l transition-colors" aria-label="Vorige periode">
+          <ChevronLeft size={16} className="lg:w-[14px] lg:h-[14px]" />
+        </button>
+        <span className="text-xs font-medium text-text-primary px-2 min-w-[7.5rem] sm:min-w-[9rem] lg:min-w-[10rem] text-center tabular-nums">{rangeLabel}</span>
+        <button type="button" onClick={() => navigate(1)} className="p-1.5 lg:p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-r transition-colors" aria-label="Volgende periode">
+          <ChevronRight size={16} className="lg:w-[14px] lg:h-[14px]" />
+        </button>
+      </div>
+      <div className="relative shrink-0" ref={presetsRef}>
+        <button type="button" onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-2.5 h-8 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary text-xs rounded-md transition-colors whitespace-nowrap">
+          {range.label} <ChevronDown size={11} />
+        </button>
+        {showPresets && (
+          <div className="absolute top-full mt-1 left-0 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[170px]">
+            {presets.map((p) => (
+              <button key={p.label} type="button" onClick={() => { setRange(p.range); setAnchorDate(p.range.start); setShowPresets(false); if (p.label.includes('week') || p.label === 'Deze week' || p.label === 'Vorige week') setViewMode('week'); else setViewMode('month') }}
+                className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <Tabs value={viewMode} onValueChange={(v) => {
+        const m = v as ViewMode
+        setViewMode(m)
+        if (m === 'week') setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` })
+        else setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) })
+      }} className="hidden lg:block shrink-0">
+        <TabsList className="h-8 px-1">
+          <TabsTrigger value="week" className="text-xs h-7 px-2">Week</TabsTrigger>
+          <TabsTrigger value="month" className="text-xs h-7 px-2">Maand</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </>
+  )
+
+  const desktopSecondaryActions = (
+    <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+      <div className="relative" ref={exportRef}>
+        <button
+          type="button"
+          onClick={() => setShowExport((v) => !v)}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed text-xs rounded transition-colors"
+        >
+          <Download size={12} /> Exporteren <ChevronDown size={11} />
+        </button>
+        {showExport && (
+          <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
+            <button type="button" onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+              <Sheet size={12} className="text-accent-green" /> CSV exporteren
+            </button>
+            <button type="button" onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+              <FileText size={12} className="text-accent-red" /> PDF exporteren
+            </button>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
+        className={clsx('flex items-center gap-1.5 px-2.5 py-1 border text-xs rounded transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-2 border-border-subtle text-text-secondary hover:text-text-primary')}
+      >
+        <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
+      </button>
+      {!selectMode && (
+        <button type="button" onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
+          <Plus size={12} /> Rit toevoegen
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <div>
       <PageHeader
         title="Reiskosten"
         subtitle={rangeLabel}
         actions={
-          <>
-            {/* Desktop: full button row */}
-            <div className="hidden lg:flex items-center gap-1.5">
-              <div className="relative" ref={exportRef}>
-                <button
-                  onClick={() => setShowExport((v) => !v)}
-                  disabled={filtered.length === 0}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed text-xs rounded transition-colors"
-                >
-                  <Download size={12} /> Exporteren <ChevronDown size={11} />
-                </button>
-                {showExport && (
-                  <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
-                    <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                      <Sheet size={12} className="text-accent-green" /> CSV exporteren
-                    </button>
-                    <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                      <FileText size={12} className="text-accent-red" /> PDF exporteren
-                    </button>
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
-                className={clsx('flex items-center gap-1.5 px-2.5 py-1 border text-xs rounded transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-2 border-border-subtle text-text-secondary hover:text-text-primary')}
-              >
-                <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
-              </button>
-              {!selectMode && (
-                <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
-                  <Plus size={12} /> Rit toevoegen
-                </button>
-              )}
+          <div className="flex w-full min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto scrollbar-none lg:flex-initial lg:justify-end">
+              {periodToolbar}
             </div>
-
-            {/* Mobile: only "Klaar" when in select mode + overflow menu */}
-            <div className="flex lg:hidden items-center gap-1.5">
+            {desktopSecondaryActions}
+            <div className="flex shrink-0 items-center gap-2 lg:hidden">
               {selectMode ? (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
                   onClick={() => { setSelectMode(false); setSelectedDates(new Set()) }}
-                  className="flex items-center gap-1.5 px-3 h-8 bg-accent-blue/15 border border-accent-blue/40 text-accent-blue text-xs font-medium rounded transition-colors"
                 >
                   Klaar
-                </button>
+                </Button>
               ) : (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-8 w-8">
-                      <MoreHorizontal size={15} />
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs font-medium border-border-subtle">
+                      <SlidersHorizontal size={14} className="text-text-muted" />
+                      Opties
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuLabel className="text-xs">Acties</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs">Exporteren &amp; selectie</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => { setSelectMode(true); setSelectedDates(new Set()) }}>
                       <CalendarDays size={13} className="mr-2" /> Datums selecteren
@@ -981,7 +1053,7 @@ export function TravelExpenses() {
                 </DropdownMenu>
               )}
             </div>
-          </>
+          </div>
         }
       />
       <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-5xl mx-auto">
@@ -1028,50 +1100,6 @@ export function TravelExpenses() {
           </div>
         </>
       )}
-
-      {/* Controls bar */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {/* Period nav */}
-        <div className="flex items-center bg-surface-2 border border-border-subtle rounded p-0.5">
-          <button onClick={() => navigate(-1)} className="p-1.5 lg:p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
-            <ChevronLeft size={14} />
-          </button>
-          <span className="text-xs font-medium text-text-primary px-2 min-w-[120px] lg:min-w-[140px] text-center">{rangeLabel}</span>
-          <button onClick={() => navigate(1)} className="p-1.5 lg:p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
-            <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Presets dropdown */}
-        <div className="relative" ref={presetsRef}>
-          <button onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-2.5 h-8 lg:h-auto lg:py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary text-xs rounded transition-colors">
-            {range.label} <ChevronDown size={11} />
-          </button>
-          {showPresets && (
-            <div className="absolute top-full mt-1 left-0 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-20 py-1 min-w-[170px]">
-              {presets.map((p) => (
-                <button key={p.label} onClick={() => { setRange(p.range); setAnchorDate(p.range.start); setShowPresets(false); if (p.label.includes('week') || p.label === 'Deze week' || p.label === 'Vorige week') setViewMode('week'); else setViewMode('month') }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* View toggle (desktop: week/month; mobile: not needed, agenda is the only mobile view) */}
-        <Tabs value={viewMode} onValueChange={(v) => {
-          const m = v as ViewMode
-          setViewMode(m)
-          if (m === 'week') setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` })
-          else setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) })
-        }} className="ml-auto">
-          <TabsList className="h-8 lg:h-7 px-1">
-            <TabsTrigger value="week" className="text-xs h-7 lg:h-6 px-2 lg:px-1.5">Week</TabsTrigger>
-            <TabsTrigger value="month" className="text-xs h-7 lg:h-6 px-2 lg:px-1.5">Maand</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-4">

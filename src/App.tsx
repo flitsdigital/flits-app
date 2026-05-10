@@ -19,6 +19,7 @@ import { Leads } from './pages/Leads'
 import { LeadDetail } from './pages/LeadDetail'
 import { TodoSheet } from './components/TodoSheet'
 import { InboxSheet } from './components/InboxSheet'
+import { GlobalSearchDialog } from './components/GlobalSearchDialog'
 import { useAuthStore } from './store/useAuthStore'
 import { useStore } from './store/useStore'
 import { useUIStore } from './store/useUIStore'
@@ -103,6 +104,7 @@ export default function App() {
       {/* Global panels — rendered outside Layout so they're always available */}
       <TodoSheet />
       <InboxSheet />
+      <GlobalSearchDialog />
 
       <Toaster position="bottom-right" richColors />
     </BrowserRouter>

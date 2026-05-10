@@ -1,6 +1,20 @@
 import { supabase, supabaseAdmin, withTimeout } from './supabase'
 import type { TravelExpense, UserProfile } from '../types'
 
+/**
+ * The `travel_expenses.id` column has no DEFAULT in the database, so we
+ * generate one client-side. `crypto.randomUUID()` is available in all
+ * modern browsers and produces a value that fits both `uuid` and `text`
+ * column types.
+ */
+function newId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // Fallback for very old environments — should never trigger in modern browsers.
+  return 'te_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
 interface DbTravelExpense {
   id: string
   user_id: string
@@ -64,6 +78,7 @@ export const travelExpensesDb = {
     const now = new Date().toISOString()
     const { error } = await withTimeout(
       supabase.from('travel_expenses').insert({
+        id: newId(),
         user_id: input.userId ?? null,
         client_id: input.clientId ?? null,
         date: input.date,
@@ -89,6 +104,7 @@ export const travelExpensesDb = {
   }): Promise<void> {
     const now = new Date().toISOString()
     const rows = input.dates.map((date) => ({
+      id: newId(),
       user_id: input.userId ?? null,
       client_id: input.clientId ?? null,
       date,

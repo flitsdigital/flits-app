@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useProjectsData, UserProfileLite } from '../hooks/useProjectsData'
 import { notificationsDb } from '../lib/notificationsDb'
+import { errorMessage } from '../lib/errors'
 import { parseMentions } from '../components/MentionTextarea'
 import { MentionTextarea } from '../components/MentionTextarea'
 import clsx from 'clsx'
@@ -149,7 +150,7 @@ function ProjectModal({
       onSaved(saved)
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -162,7 +163,7 @@ function ProjectModal({
       await projectsDb.deleteProject(project.id)
       toast.success('Project verwijderd')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setLoading(false)
       return
     }
@@ -370,7 +371,7 @@ function TaskModal({
       onSaved(saved)
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -381,7 +382,7 @@ function TaskModal({
     try {
       await projectsDb.deleteTask(task.id)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setLoading(false)
       return
     }

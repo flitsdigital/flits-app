@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, Shield, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { supabaseAdmin } from '../lib/supabase'
+import { errorMessage } from '../lib/errors'
 import { useAuthStore } from '../store/useAuthStore'
 import { PageHeader } from '../components/PageHeader'
 import type { UserProfile, AppPage, UserRole } from '../types'
@@ -111,7 +112,7 @@ function UserModal({
       onSaved()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     } finally {
       setLoading(false)
     }

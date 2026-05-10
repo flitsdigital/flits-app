@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Client, ClientInvoice, InvoiceRecord, Post, PostLog } from '../types'
 import { enrichClient } from '../lib/billing'
 import { db, postDb, postLogDb, clientInvoiceDb } from '../lib/db'
+import { errorMessage } from '../lib/errors'
 import { useAuthStore } from './useAuthStore'
 
 function generateId(): string {
@@ -80,7 +81,7 @@ export const useStore = create<StoreState>()((set, get) => ({
       ])
       set({ clients, posts, clientInvoices, initialized: true, error: null })
     } catch (e) {
-      set({ initialized: true, error: e instanceof Error ? e.message : String(e) })
+      set({ initialized: true, error: errorMessage(e) })
     }
   },
 
