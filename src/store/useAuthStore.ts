@@ -49,6 +49,17 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       })
     }
 
+    // Hard safety net: never let `loading` stay true beyond ~14s, regardless
+    // of what supabase-internals do. Worst case the user is briefly logged
+    // out and gets redirected to /login instead of staring at a spinner.
+    const safety = setTimeout(() => {
+      const s = useAuthStore.getState()
+      if (s.loading) {
+        console.warn('auth init safety timeout — forcing loading=false')
+        set({ loading: false })
+      }
+    }, 14_000)
+
     try {
       const { data: { session }, error } = await withTimeout(supabase.auth.getSession(), 12_000)
       if (error) {
@@ -60,10 +71,13 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       } else {
         set({ session: null, profile: null, loading: false })
       }
-    } catch {
+    } catch (err) {
       // Time-out or netwerkfout: spinner niet eindeloos laten hangen.
       // `onAuthStateChange` kan daarna alsnog INITIAL_SESSION / SIGNED_IN afleveren.
+      console.warn('auth initialize timeout', err)
       set((s) => (s.loading ? { ...s, loading: false } : s))
+    } finally {
+      clearTimeout(safety)
     }
   },
 

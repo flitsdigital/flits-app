@@ -99,10 +99,10 @@ function toRow(client: Client): Record<string, unknown> {
 
 export const db = {
   async fetchAll(): Promise<Client[]> {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('company_name')
+    const { data, error } = await withTimeout(
+      supabase.from('clients').select('*').order('company_name'),
+      15_000,
+    )
     if (error) throw error
     return (data as DbRow[]).map(fromRow)
   },
@@ -182,10 +182,10 @@ function clientInvoiceToRow(inv: ClientInvoice): DbClientInvoice {
 
 export const clientInvoiceDb = {
   async fetchAll(): Promise<ClientInvoice[]> {
-    const { data, error } = await supabase
-      .from('client_invoices')
-      .select('*')
-      .order('due_date', { ascending: true })
+    const { data, error } = await withTimeout(
+      supabase.from('client_invoices').select('*').order('due_date', { ascending: true }),
+      15_000,
+    )
     if (error) throw error
     return (data as DbClientInvoice[]).map(clientInvoiceFromRow)
   },
@@ -262,20 +262,19 @@ function postToRow(post: Post): DbPost {
 
 export const postDb = {
   async fetchAll(): Promise<Post[]> {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .order('date', { ascending: false })
+    const { data, error } = await withTimeout(
+      supabase.from('posts').select('*').order('date', { ascending: false }),
+      15_000,
+    )
     if (error) throw error
     return (data as DbPost[]).map(postFromRow)
   },
 
   async fetchForClient(clientId: string): Promise<Post[]> {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('date', { ascending: false })
+    const { data, error } = await withTimeout(
+      supabase.from('posts').select('*').eq('client_id', clientId).order('date', { ascending: false }),
+      15_000,
+    )
     if (error) throw error
     return (data as DbPost[]).map(postFromRow)
   },
