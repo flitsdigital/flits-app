@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { usePageMeta } from '../hooks/usePageMeta'
 import {
   startOfMonth,
@@ -58,6 +58,7 @@ import {
 import { useStore } from "../store/useStore";
 import { PostForm } from "../components/PostForm";
 import { PageHeader } from "../components/PageHeader";
+import { useIsMobile } from "../hooks/useBreakpoint";
 import {
   postStatusDot,
   postStatusColor,
@@ -216,7 +217,7 @@ function ContentKanbanBoard({
   );
 
   return (
-    <div className="flex gap-3 h-full min-h-[420px] overflow-x-auto pb-4">
+    <div className="flex gap-3 h-full min-h-[420px] overflow-x-auto pb-4 snap-x snap-mandatory">
       {POST_KANBAN_COLS.map(({ id, label, Icon, bg, headerBg, ring, text }) => {
         const colPosts = byStatus[id];
         const isOver = dragOverStatus === id;
@@ -228,7 +229,7 @@ function ContentKanbanBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(e) => handleDrop(e, id)}
             className={clsx(
-              "flex flex-col w-[272px] shrink-0 rounded-xl overflow-hidden border transition-all duration-150",
+              "flex flex-col w-[272px] shrink-0 snap-start rounded-xl overflow-hidden border transition-all duration-150",
               bg,
               isOver
                 ? "border-accent-blue/60 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]"
@@ -423,15 +424,15 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="lg:max-w-2xl p-0 gap-0 lg:max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-row items-center gap-2 px-5 py-4 border-b border-border-subtle space-y-0">
           <CalendarRange size={15} className="text-accent-blue" />
           <DialogTitle className="text-sm font-semibold">Content plannen</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
           {/* Left: settings */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5 border-r border-border-subtle">
+          <div className="flex-1 overflow-y-auto p-5 space-y-5 lg:border-r border-border-subtle">
 
             {/* Client */}
             <div>
@@ -534,7 +535,7 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
           </div>
 
           {/* Right: preview */}
-          <div className="w-64 shrink-0 flex flex-col overflow-hidden">
+          <div className="lg:w-64 lg:shrink-0 flex flex-col overflow-hidden border-t lg:border-t-0 border-border-subtle max-h-[40dvh] lg:max-h-none">
             <div className="px-4 py-3 border-b border-border-subtle">
               <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
                 Voorbeeld
@@ -564,15 +565,15 @@ function ContentPlanModal({ onClose, onGenerated }: { onClose: () => void; onGen
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3.5 border-t border-border-subtle flex items-center justify-between">
+        <div className="px-5 py-3.5 border-t border-border-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-xs text-text-muted">
             {preview.length > 0
               ? `${preview.length} lege posts worden aangemaakt als "Te doen"`
               : 'Stel een patroon in om te beginnen'}
           </p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Annuleren</Button>
-            <Button onClick={handleGenerate} disabled={!canGenerate || loading} className="gap-2">
+          <div className="flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={onClose} className="flex-1 sm:flex-initial">Annuleren</Button>
+            <Button onClick={handleGenerate} disabled={!canGenerate || loading} className="gap-2 flex-1 sm:flex-initial">
               {loading ? (
                 <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Genereren…</>
               ) : (
@@ -624,7 +625,12 @@ function ClientFilterCombobox({ value, onChange, clients }: { value: string; onC
 export function Content() {
   usePageMeta('Content → Flits Impact', 'Plan en beheer social media content voor al je klanten.')
   const { posts, clients, addPost, updatePost, deletePost } = useStore();
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const isMobile = useIsMobile();
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023.98px)').matches
+      ? 'list'
+      : 'month'
+  ));
   const [currentDate, setCurrentDate] = useState(new Date());
   const [postFormOpen, setPostFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
@@ -639,6 +645,10 @@ export function Content() {
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
   const [weekTodosOnly, setWeekTodosOnly] = useState(false);
+
+  useEffect(() => {
+    if (isMobile && viewMode === 'month') setViewMode('list');
+  }, [isMobile, viewMode]);
 
   const clientMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -935,48 +945,52 @@ export function Content() {
               </Label>
             </div>
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList className="h-7 p-0.5">
-                <TabsTrigger value="month" className="text-xs h-6 px-2.5">Maand</TabsTrigger>
-                <TabsTrigger value="week" className="text-xs h-6 px-2.5">Week</TabsTrigger>
-                <TabsTrigger value="kanban" className="text-xs h-6 px-2.5 gap-1">
+              <TabsList className="h-8 lg:h-7 p-0.5">
+                <TabsTrigger value="month" className="text-xs h-7 lg:h-6 px-2.5 hidden lg:inline-flex">Maand</TabsTrigger>
+                <TabsTrigger value="week" className="text-xs h-7 lg:h-6 px-2.5">Week</TabsTrigger>
+                <TabsTrigger value="kanban" className="text-xs h-7 lg:h-6 px-2.5 gap-1">
                   <LayoutGrid size={12} className="opacity-70" />
                   Kanban
                 </TabsTrigger>
-                <TabsTrigger value="list" className="text-xs h-6 px-2.5">Lijst</TabsTrigger>
+                <TabsTrigger value="list" className="text-xs h-7 lg:h-6 px-2.5">Lijst</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button variant="outline" size="sm" onClick={() => setPlanModalOpen(true)} className="h-7 text-xs gap-1.5">
-              <CalendarRange size={12} /> Content plannen
+            <Button variant="outline" size="sm" onClick={() => setPlanModalOpen(true)} className="h-8 lg:h-7 text-xs gap-1.5">
+              <CalendarRange size={12} />
+              <span className="hidden sm:inline">Content plannen</span>
+              <span className="sm:hidden">Plannen</span>
             </Button>
-            <Button size="sm" onClick={() => openNewPost()} className="h-7 text-xs gap-1.5">
-              <Plus size={12} /> Post toevoegen
+            <Button size="sm" onClick={() => openNewPost()} className="h-8 lg:h-7 text-xs gap-1.5">
+              <Plus size={12} />
+              <span className="hidden sm:inline">Post toevoegen</span>
+              <span className="sm:hidden">Post</span>
             </Button>
           </>
         }
       />
-      <div className="px-6 py-5 max-w-full">
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-full">
 
       {/* Stats — alleen bij kalenderviews */}
-      <div className={`flex items-center gap-4 mb-5 ${viewMode === "list" ? "hidden" : ""}`}>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-2 border border-border-subtle rounded-lg">
+      <div className={`flex items-center gap-3 lg:gap-4 mb-4 lg:mb-5 overflow-x-auto scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 ${viewMode === "list" ? "hidden" : ""}`}>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-2 border border-border-subtle rounded-lg shrink-0 whitespace-nowrap">
           <span className="text-xs text-text-muted capitalize">{navLabel}</span>
           <span className="text-xs font-medium text-text-primary">
             {stats.total} posts
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-2 h-2 rounded-full bg-zinc-500" />
           <span className="text-xs text-text-muted">{stats.todo} te doen</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-2 h-2 rounded-full bg-orange-400" />
           <span className="text-xs text-text-muted">{stats.in_progress} bezig</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-2 h-2 rounded-full bg-blue-400" />
           <span className="text-xs text-text-muted">{stats.feedback} voor feedback</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-2 h-2 rounded-full bg-green-400" />
           <span className="text-xs text-text-muted">{stats.posted} gepost</span>
         </div>
@@ -1236,8 +1250,8 @@ export function Content() {
         return (
           <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
 
-            {/* Tabelheader */}
-            <div className={`grid ${COLS} gap-3 items-center px-4 py-2.5 border-b border-border-subtle bg-surface-1/60 sticky top-0 z-10`}>
+            {/* Tabelheader (desktop only) */}
+            <div className={`hidden lg:grid ${COLS} gap-3 items-center px-4 py-2.5 border-b border-border-subtle bg-surface-1/60 sticky top-0 z-10`}>
               {/* Checkbox alles */}
               <div onClick={toggleAll} className="flex items-center justify-center cursor-pointer">
                 <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${allSelected ? 'bg-accent-blue border-accent-blue' : someSelected ? 'bg-accent-blue/50 border-accent-blue' : 'border-zinc-600 hover:border-zinc-400'}`}>
@@ -1274,47 +1288,86 @@ export function Content() {
                   const thumb = post.mediaUrls?.[0] ?? post.mediaUrl
                   const isSelected = selectedPostIds.has(post.id)
                   return (
-                    <div
-                      key={post.id}
-                      onClick={() => { setEditingPost(post); setPostFormOpen(true) }}
-                      className={`grid ${COLS} gap-3 items-center px-4 py-2.5 border-b border-border-subtle/30 cursor-pointer transition-colors group ${isSelected ? 'bg-accent-blue/[0.06]' : 'hover:bg-white/[0.025]'}`}
-                    >
-                      {/* Checkbox */}
+                    <div key={post.id}>
+                      {/* Desktop rij */}
                       <div
-                        onClick={(e) => toggleOne(post.id, e)}
-                        className="flex items-center justify-center"
+                        onClick={() => { setEditingPost(post); setPostFormOpen(true) }}
+                        className={`hidden lg:grid ${COLS} gap-3 items-center px-4 py-2.5 border-b border-border-subtle/30 cursor-pointer transition-colors group ${isSelected ? 'bg-accent-blue/[0.06]' : 'hover:bg-white/[0.025]'}`}
                       >
-                        <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-accent-blue border-accent-blue' : 'border-zinc-600 opacity-0 group-hover:opacity-100 hover:border-zinc-400'}`}>
-                          {isSelected && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        {/* Checkbox */}
+                        <div
+                          onClick={(e) => toggleOne(post.id, e)}
+                          className="flex items-center justify-center"
+                        >
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-accent-blue border-accent-blue' : 'border-zinc-600 opacity-0 group-hover:opacity-100 hover:border-zinc-400'}`}>
+                            {isSelected && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        </div>
+
+                        {/* Thumbnail */}
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-surface-3 border border-border-subtle shrink-0 flex items-center justify-center">
+                          {thumb
+                            ? <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            : <Icon size={13} className="text-text-muted" />
+                          }
+                        </div>
+
+                        {/* Caption */}
+                        <p className="text-sm text-text-primary truncate">
+                          {post.caption || <span className="text-text-muted italic text-xs">Geen caption</span>}
+                        </p>
+
+                        {/* Klant */}
+                        <span className={`text-xs font-medium truncate ${sc.text}`}>{clientName}</span>
+
+                        {/* Type */}
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                          <Icon size={12} className="shrink-0" />
+                          {postTypeLabel(post.type)}
+                        </div>
+
+                        {/* Status */}
+                        <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border w-fit ${postStatusColor[st]}`}>
+                          {postStatusLabel(st)}
+                        </span>
+                      </div>
+
+                      {/* Mobile card */}
+                      <div
+                        onClick={() => { setEditingPost(post); setPostFormOpen(true) }}
+                        className={`lg:hidden flex items-start gap-3 px-4 py-3 border-b border-border-subtle/30 cursor-pointer transition-colors ${isSelected ? 'bg-accent-blue/[0.06]' : 'hover:bg-white/[0.025]'}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => toggleOne(post.id, e)}
+                          className="flex items-center justify-center mt-1 shrink-0"
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-accent-blue border-accent-blue' : 'border-zinc-600 hover:border-zinc-400'}`}>
+                            {isSelected && <svg width="9" height="9" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        </button>
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-3 border border-border-subtle shrink-0 flex items-center justify-center">
+                          {thumb
+                            ? <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            : <Icon size={14} className="text-text-muted" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className={`text-xs font-medium ${sc.text} truncate max-w-[160px]`}>{clientName}</span>
+                            <span className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${postStatusColor[st]}`}>
+                              {postStatusLabel(st)}
+                            </span>
+                            <span className="text-[10px] text-text-muted inline-flex items-center gap-1">
+                              <Icon size={10} />
+                              {postTypeLabel(post.type)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-text-primary line-clamp-2">
+                            {post.caption || <span className="text-text-muted italic text-xs">Geen caption</span>}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Thumbnail */}
-                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-surface-3 border border-border-subtle shrink-0 flex items-center justify-center">
-                        {thumb
-                          ? <img src={thumb} alt="" className="w-full h-full object-cover" />
-                          : <Icon size={13} className="text-text-muted" />
-                        }
-                      </div>
-
-                      {/* Caption */}
-                      <p className="text-sm text-text-primary truncate">
-                        {post.caption || <span className="text-text-muted italic text-xs">Geen caption</span>}
-                      </p>
-
-                      {/* Klant */}
-                      <span className={`text-xs font-medium truncate ${sc.text}`}>{clientName}</span>
-
-                      {/* Type */}
-                      <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                        <Icon size={12} className="shrink-0" />
-                        {postTypeLabel(post.type)}
-                      </div>
-
-                      {/* Status */}
-                      <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border w-fit ${postStatusColor[st]}`}>
-                        {postStatusLabel(st)}
-                      </span>
                     </div>
                   )
                 })}
@@ -1326,7 +1379,7 @@ export function Content() {
 
       {/* ── FLOATING BULK ACTION BAR ─────────────────────────────────────── */}
       {selectedPostIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/40">
+        <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+0.75rem)] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/40 max-w-[95vw]">
           {/* Teller */}
           <span className="text-sm font-medium text-white pl-1">
             {selectedPostIds.size} geselecteerd

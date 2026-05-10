@@ -133,7 +133,7 @@ export function ClientBillingSection({ client }: { client: Client }) {
             <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
               Facturatie
             </h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="bg-surface-3 rounded-lg p-3.5">
                 <p className="text-xs text-text-muted mb-1">Vorige factuur</p>
                 <p className="text-sm font-medium text-text-primary">{formatWeek(client.lastInvoiceDate)}</p>
@@ -418,7 +418,8 @@ export function ClientBillingSection({ client }: { client: Client }) {
       </div>
 
       <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_100px_120px_100px_80px] gap-2 px-4 py-2 border-b border-border-subtle text-xs font-medium text-text-muted">
+        {/* Desktop kolomkoppen */}
+        <div className="hidden sm:grid grid-cols-[1fr_100px_120px_100px_80px] gap-2 px-4 py-2 border-b border-border-subtle text-xs font-medium text-text-muted">
           <span>Label</span>
           <span>Bedrag</span>
           <span>Vervaldatum</span>
@@ -430,34 +431,82 @@ export function ClientBillingSection({ client }: { client: Client }) {
             <div className="px-4 py-6 text-xs text-text-muted text-center">Nog geen termijnen.</div>
           )}
           {invs.map((inv) => (
-            <div
-              key={inv.id}
-              className="grid grid-cols-[1fr_100px_120px_100px_80px] gap-2 px-4 py-2.5 items-center text-sm"
-            >
-              <span className="text-text-primary font-medium truncate">{inv.label}</span>
-              <span>€{inv.amount.toLocaleString('nl-NL')}</span>
-              <span className="text-text-muted text-xs">{formatDate(inv.dueDate)}</span>
-              <span className="text-xs">{invoiceStatusLabel(inv.status)}</span>
-              <div className="flex justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => {
-                    setEditingInvoice(inv)
-                    setMilestoneOpen(true)
-                  }}
-                >
-                  <Pencil size={13} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive"
-                  onClick={() => void deleteClientInvoice(inv.id)}
-                >
-                  <Trash2 size={13} />
-                </Button>
+            <div key={inv.id}>
+              {/* Desktop rij */}
+              <div className="hidden sm:grid grid-cols-[1fr_100px_120px_100px_80px] gap-2 px-4 py-2.5 items-center text-sm">
+                <span className="text-text-primary font-medium truncate">{inv.label}</span>
+                <span>€{inv.amount.toLocaleString('nl-NL')}</span>
+                <span className="text-text-muted text-xs">{formatDate(inv.dueDate)}</span>
+                <span className="text-xs">{invoiceStatusLabel(inv.status)}</span>
+                <div className="flex justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      setEditingInvoice(inv)
+                      setMilestoneOpen(true)
+                    }}
+                  >
+                    <Pencil size={13} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => void deleteClientInvoice(inv.id)}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Mobile card */}
+              <div className="sm:hidden flex items-start justify-between gap-2 px-4 py-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm font-medium text-text-primary truncate">{inv.label}</p>
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-text-primary font-medium">
+                      €{inv.amount.toLocaleString('nl-NL')}
+                    </span>
+                    <span className="text-text-muted">·</span>
+                    <span className="text-text-muted">{formatDate(inv.dueDate)}</span>
+                  </div>
+                  <span
+                    className={`inline-block text-[10px] px-1.5 py-0.5 rounded border ${
+                      inv.status === 'paid'
+                        ? 'bg-green-500/15 text-green-400 border-green-500/25'
+                        : inv.status === 'sent'
+                          ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
+                          : inv.status === 'overdue'
+                            ? 'bg-red-500/15 text-red-400 border-red-500/25'
+                            : 'bg-surface-3 text-text-muted border-border-subtle'
+                    }`}
+                  >
+                    {invoiceStatusLabel(inv.status)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setEditingInvoice(inv)
+                      setMilestoneOpen(true)
+                    }}
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    onClick={() => void deleteClientInvoice(inv.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

@@ -49,15 +49,15 @@ function KpiCard({
     green:  'text-green-400',
   }
   const inner = (
-    <CardContent className="p-4">
-      <div className="flex items-start justify-between mb-2">
-        <p className="text-xs text-text-muted leading-none">{label}</p>
+    <CardContent className="p-3 lg:p-4">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="text-xs text-text-muted leading-tight truncate">{label}</p>
         <Icon size={13} className="text-text-muted opacity-50 shrink-0" />
       </div>
-      <p className={cn('text-xl font-semibold text-text-primary tabular-nums', accent && accentCls[accent])}>
+      <p className={cn('text-lg lg:text-xl font-semibold text-text-primary tabular-nums truncate', accent && accentCls[accent])}>
         {value}
       </p>
-      {sub && <p className="text-xs text-text-muted mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-text-muted mt-1 truncate">{sub}</p>}
     </CardContent>
   )
   if (to) return <Card className="hover:bg-white/[0.02] transition-colors cursor-pointer"><Link to={to}>{inner}</Link></Card>
@@ -287,10 +287,10 @@ export function Dashboard() {
         subtitle={format(today, "EEEE d MMMM yyyy", { locale: nl })}
       />
 
-      <div className="px-6 py-5 max-w-[1400px] mx-auto flex flex-col gap-6">
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-[1400px] mx-auto flex flex-col gap-4 lg:gap-6">
 
         {/* ── KPI row ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 lg:gap-3">
           <KpiCard
             label="Actieve klanten"
             value={clientStats.active.length}

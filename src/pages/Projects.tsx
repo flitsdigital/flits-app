@@ -742,7 +742,7 @@ function KanbanBoard({
   }
 
   return (
-    <div className="flex gap-3 h-full overflow-x-auto pb-4">
+    <div className="flex gap-3 h-full overflow-x-auto pb-4 snap-x snap-mandatory">
       {TASK_STATUSES.map(({ id, label, Icon, color, bg, headerBg, ring }) => {
         const isOver = dragOverStatus === id
         const isDragSource = draggedId !== null && byStatus[id].some(t => t.id === draggedId)
@@ -753,7 +753,7 @@ function KanbanBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={e => handleDrop(e, id)}
             className={clsx(
-              'flex flex-col w-[272px] shrink-0 rounded-xl overflow-hidden border transition-all duration-150',
+              'flex flex-col w-[272px] shrink-0 snap-start rounded-xl overflow-hidden border transition-all duration-150',
               bg,
               isOver
                 ? 'border-accent-blue/60 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
@@ -1362,7 +1362,7 @@ export function Projects() {
     return (
       <div className="flex flex-col h-full">
         {/* Board header */}
-        <div className="flex items-center gap-2 px-6 py-[13px] border-b border-border-subtle shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle shrink-0 flex-wrap">
           <button
             onClick={() => { setSelectedProject(null); setTasks([]); setSprints([]) }}
             className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors text-sm"
@@ -1460,7 +1460,7 @@ export function Projects() {
         )}
 
         {/* Board / List / Activity */}
-        <div className={clsx('flex-1 px-6 pt-5', boardView === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
+        <div className={clsx('flex-1 px-4 lg:px-6 pt-4 lg:pt-5', boardView === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
           {boardView === 'kanban' ? (
             <KanbanBoard
               tasks={sprintFilteredTasks}
@@ -1549,9 +1549,48 @@ export function Projects() {
   // ── Projects list view ─────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full">
-      {/* Left: nav */}
-      <aside className="w-52 shrink-0 border-r border-border-subtle flex flex-col">
+    <div className="flex flex-col lg:flex-row h-full">
+      {/* Mobile project select */}
+      <div className="lg:hidden border-b border-border-subtle px-4 py-3 flex items-center gap-2">
+        <Select
+          value={leftNav === 'overview' ? '__overview__' : (selectedClientId ?? '__all__')}
+          onValueChange={(v) => {
+            if (v === '__overview__') {
+              openOverview()
+            } else if (v === '__all__') {
+              setLeftNav('projects')
+              setSelectedClientId(null)
+            } else {
+              setLeftNav('projects')
+              setSelectedClientId(v)
+            }
+          }}
+        >
+          <SelectTrigger className="h-9 text-sm flex-1">
+            <span>
+              {leftNav === 'overview'
+                ? 'Alle taken'
+                : selectedClientId
+                  ? clients.find((c) => c.id === selectedClientId)?.companyName ?? 'Onbekend'
+                  : `Alle klanten (${projects.length})`}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="__overview__">Alle taken</SelectItem>
+              <SelectItem value="__all__">Alle klanten ({projects.length})</SelectItem>
+              {clientsWithProjects.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.companyName} ({c.count})
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Left: nav (desktop only) */}
+      <aside className="w-52 shrink-0 border-r border-border-subtle hidden lg:flex flex-col">
         {/* Overview section */}
         <div className="px-2 pt-3 pb-2 border-b border-border-subtle">
           <button
@@ -1601,13 +1640,13 @@ export function Projects() {
       <main className="flex-1 overflow-y-auto">
         {leftNav === 'overview' ? (
           <>
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
               <div>
                 <h1 className="text-sm font-semibold text-text-primary">Alle taken</h1>
                 <p className="text-xs text-text-muted mt-0.5">{allTasks.length} taken over {projects.length} projecten</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4 lg:p-5">
               {allTasksLoading ? (
                 <div className="flex justify-center py-16">
                   <div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
@@ -1626,20 +1665,21 @@ export function Projects() {
           </>
         ) : (
           <>
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
-              <div>
-                <h1 className="text-sm font-semibold text-text-primary">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-text-primary truncate">
                   {selectedClientId ? clients.find(c => c.id === selectedClientId)?.companyName : 'Projecten'}
                 </h1>
                 <p className="text-xs text-text-muted mt-0.5">{filteredProjects.length} projecten</p>
               </div>
-              <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }}>
+              <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }} className="shrink-0">
                 <Plus size={13} />
-                Nieuw project
+                <span className="hidden sm:inline">Nieuw project</span>
+                <span className="sm:hidden">Nieuw</span>
               </Button>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 lg:p-6">
               {loading ? (
                 <div className="flex justify-center py-16">
                   <div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
@@ -1653,7 +1693,7 @@ export function Projects() {
                   <p className="text-xs text-text-muted">Maak een nieuw project aan om te beginnen</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredProjects.map(project => (
                     <ProjectCard
                       key={project.id}

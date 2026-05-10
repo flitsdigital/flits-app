@@ -367,7 +367,7 @@ export function PostForm({
       direction="right"
       // vaul drawers don't use Radix FocusScope — Popovers work natively
     >
-      <DrawerContent className="inset-y-0 right-0 left-auto mt-0 h-full w-[500px] rounded-none border-l rounded-l-xl flex flex-col [&>div:first-child]:hidden outline-none">
+      <DrawerContent className="inset-y-0 right-0 left-auto mt-0 h-full w-full sm:w-[500px] rounded-none border-l sm:rounded-l-xl flex flex-col [&>div:first-child]:hidden outline-none">
         <DrawerTitle className="sr-only">
           {initial?.id ? 'Post bewerken' : 'Nieuwe post maken'}
         </DrawerTitle>

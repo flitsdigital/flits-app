@@ -1,88 +1,74 @@
-import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  GanttChart,
-  CalendarDays,
-  Car,
-  Settings,
-  LogOut,
-  Kanban,
-  Zap,
-  UserPlus,
-  CheckSquare,
-  Bell,
-} from "lucide-react";
-import { useAuthStore } from "../store/useAuthStore";
-import { useUIStore } from "../store/useUIStore";
-import { useTodosData } from "../hooks/useTodosData";
-import { useNotifications } from "../hooks/useNotifications";
-import type { AppPage } from "../types";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { NavLink } from 'react-router-dom'
+import { LogOut, Zap, CheckSquare, Bell } from 'lucide-react'
+import { useAuthStore } from '../store/useAuthStore'
+import { useUIStore } from '../store/useUIStore'
+import { useTodosData } from '../hooks/useTodosData'
+import { useNotifications } from '../hooks/useNotifications'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+import { filterNavForUser, SETTINGS_NAV, type NavEntry } from '../lib/nav'
 
-const ALL_NAV: {
-  to: string;
-  label: string;
-  icon: React.ElementType;
-  exact: boolean;
-  page: AppPage;
-}[] = [
-  { to: "/",           label: "Dashboard", icon: LayoutDashboard, exact: true,  page: "dashboard" },
-  { to: "/clients",    label: "Klanten",   icon: Users,           exact: false, page: "clients"   },
-  { to: "/timeline",   label: "Timeline",  icon: GanttChart,      exact: false, page: "timeline"  },
-  { to: "/content",    label: "Content",   icon: CalendarDays,    exact: false, page: "content"   },
-  { to: "/reiskosten", label: "Reiskosten",icon: Car,             exact: false, page: "reiskosten"},
-  { to: "/projects",   label: "Projecten", icon: Kanban,          exact: false, page: "projects"  },
-  { to: "/leads",      label: "Leads",     icon: UserPlus,        exact: false, page: "leads"     },
-];
-
-function NavItem({ to, label, icon: Icon, exact }: { to: string; label: string; icon: React.ElementType; exact: boolean }) {
+function NavItem({
+  to,
+  label,
+  icon: Icon,
+  exact,
+  onNavigate,
+}: NavEntry & { onNavigate?: () => void }) {
   return (
     <NavLink
       to={to}
       end={exact}
+      onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          "group flex items-center gap-2 px-2.5 py-[5px] rounded text-sm transition-colors duration-100",
+          'group flex items-center gap-2 px-2.5 py-[5px] rounded text-sm transition-colors duration-100',
           isActive
-            ? "bg-white/[0.08] text-text-primary"
-            : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]",
+            ? 'bg-white/[0.08] text-text-primary'
+            : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]',
         )
       }
     >
       <Icon size={14} strokeWidth={1.8} className="shrink-0 opacity-70" />
       <span className="leading-none">{label}</span>
     </NavLink>
-  );
+  )
 }
 
-export function Sidebar() {
-  const profile = useAuthStore((s) => s.profile);
-  const signOut = useAuthStore((s) => s.signOut);
-  const toggleTodo = useUIStore((s) => s.toggleTodo);
-  const toggleInbox = useUIStore((s) => s.toggleInbox);
-  const { openCount } = useTodosData();
-  const { unreadCount } = useNotifications();
+interface Props {
+  className?: string
+  /** Geef in mobiele drawer mee om de drawer te sluiten na navigatie. */
+  onNavigate?: () => void
+}
 
-  const isAdmin = profile?.role === "admin";
-  const nav = ALL_NAV.filter(
-    ({ page }) => isAdmin || (profile?.allowed_pages ?? []).includes(page),
-  );
+export function Sidebar({ className, onNavigate }: Props) {
+  const profile = useAuthStore((s) => s.profile)
+  const signOut = useAuthStore((s) => s.signOut)
+  const toggleTodo = useUIStore((s) => s.toggleTodo)
+  const toggleInbox = useUIStore((s) => s.toggleInbox)
+  const { openCount } = useTodosData()
+  const { unreadCount } = useNotifications()
 
-  const initials = (profile?.name ?? profile?.email ?? "U")
-    .split(" ")
+  const isAdmin = profile?.role === 'admin'
+  const nav = filterNavForUser(profile)
+
+  const initials = (profile?.name ?? profile?.email ?? 'U')
+    .split(' ')
     .map((w) => w[0])
     .slice(0, 2)
-    .join("")
-    .toUpperCase();
+    .join('')
+    .toUpperCase()
 
   return (
-    <aside className="w-[210px] shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0 select-none">
-
+    <aside
+      className={cn(
+        'w-[210px] shrink-0 flex flex-col bg-surface-1 border-r border-border-subtle h-screen sticky top-0 select-none',
+        className,
+      )}
+    >
       {/* Workspace header */}
       <div className="h-10 flex items-center px-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -99,7 +85,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-px scrollbar-none">
         {nav.map((item) => (
-          <NavItem key={item.to} {...item} />
+          <NavItem key={item.to} {...item} onNavigate={onNavigate} />
         ))}
       </nav>
 
@@ -125,7 +111,9 @@ export function Sidebar() {
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right"><p>Taken (T)</p></TooltipContent>
+              <TooltipContent side="right">
+                <p>Taken (T)</p>
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
@@ -145,14 +133,14 @@ export function Sidebar() {
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right"><p>Inbox</p></TooltipContent>
+              <TooltipContent side="right">
+                <p>Inbox</p>
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
 
-        {isAdmin && (
-          <NavItem to="/settings" label="Instellingen" icon={Settings} exact={false} />
-        )}
+        {isAdmin && <NavItem {...SETTINGS_NAV} onNavigate={onNavigate} />}
 
         {/* User row */}
         <div className="flex items-center gap-2 px-2.5 py-[5px] mt-1">
@@ -162,7 +150,7 @@ export function Sidebar() {
             </AvatarFallback>
           </Avatar>
           <span className="text-sm text-text-secondary truncate flex-1 leading-none">
-            {profile?.name ?? profile?.email ?? ""}
+            {profile?.name ?? profile?.email ?? ''}
           </span>
           <TooltipProvider delayDuration={300}>
             <Tooltip>
@@ -184,5 +172,5 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
-  );
+  )
 }

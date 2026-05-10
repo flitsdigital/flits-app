@@ -222,7 +222,7 @@ export function ClientForm({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <p className="text-xs text-muted-foreground">
@@ -263,7 +263,7 @@ export function ClientForm({
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                   Klantgegevens
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Bedrijfsnaam *" htmlFor="companyName">
                     <Input
                       id="companyName"
@@ -335,7 +335,7 @@ export function ClientForm({
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                   Contract
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Startdatum *" htmlFor="startDate">
                     <Input
                       id="startDate"
@@ -386,7 +386,7 @@ export function ClientForm({
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 Facturatie
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Facturatiecyclus">
                   <Select
                     value={form.billingCycle}
@@ -437,7 +437,7 @@ export function ClientForm({
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Project & termijnen
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Projectbudget (€) *" htmlFor="projectBudget">
                   <Input
                     id="projectBudget"
@@ -504,7 +504,7 @@ export function ClientForm({
                   onChange={(e) => setOneoffDraft((d) => ({ ...d, label: e.target.value }))}
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Bedrag (€) *" htmlFor="oneoffAmount">
                   <Input
                     id="oneoffAmount"
@@ -536,7 +536,7 @@ export function ClientForm({
             </section>
           )}
 
-          <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="sticky bottom-0 -mx-4 lg:-mx-6 -mb-4 lg:-mb-6 px-4 lg:px-6 py-3 bg-background border-t border-border-subtle flex items-center justify-between gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="flex gap-2">
               {step > 0 && (
                 <Button type="button" variant="outline" onClick={goBack} className="gap-1">
@@ -546,7 +546,7 @@ export function ClientForm({
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose} className="hidden sm:inline-flex">
                 Annuleren
               </Button>
               {step < 2 ? (

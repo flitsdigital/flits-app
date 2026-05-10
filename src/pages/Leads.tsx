@@ -221,7 +221,7 @@ function LeadsKanban({
   }
 
   return (
-    <div className="flex gap-3 h-full overflow-x-auto pb-4">
+    <div className="flex gap-3 h-full overflow-x-auto pb-4 snap-x snap-mandatory">
       {PIPELINE.map((status) => {
         const cfg = LEAD_STATUS_CONFIG[status]
         const Icon = cfg.Icon
@@ -236,7 +236,7 @@ function LeadsKanban({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(e) => handleDrop(e, status)}
             className={clsx(
-              'flex flex-col w-[272px] shrink-0 rounded-xl overflow-hidden border transition-all duration-150',
+              'flex flex-col w-[272px] shrink-0 snap-start rounded-xl overflow-hidden border transition-all duration-150',
               cfg.bg,
               isOver
                 ? 'border-accent-blue/60 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
@@ -374,17 +374,18 @@ export function Leads() {
         title="Leads"
         subtitle={`${leads.length} leads · €${totalPipeline.toLocaleString('nl-NL')} in pipeline`}
         actions={
-          <Button size="sm" onClick={() => openAddForm()} className="h-7 text-xs gap-1.5">
+          <Button size="sm" onClick={() => openAddForm()} className="h-8 lg:h-7 text-xs gap-1.5">
             <Plus size={14} />
-            Nieuwe lead
+            <span className="hidden sm:inline">Nieuwe lead</span>
+            <span className="sm:hidden">Lead</span>
           </Button>
         }
       />
 
-      <div className={clsx('flex-1 px-6 py-5 flex flex-col min-h-0', viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
+      <div className={clsx('flex-1 px-4 lg:px-6 py-4 lg:py-5 flex flex-col min-h-0', viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
         {/* Toolbar */}
-        <div className="flex items-center gap-3 mb-5 shrink-0">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex items-center gap-2 lg:gap-3 mb-4 lg:mb-5 shrink-0 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] lg:max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <Input
               className="pl-8 bg-surface-2 border-border-subtle"
@@ -395,19 +396,21 @@ export function Leads() {
           </div>
 
           {viewMode === 'list' && (
-            <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as LeadStatus | 'all')}>
-              <TabsList className="h-8">
-                <TabsTrigger value="all" className="text-xs h-6 px-2.5">Alle</TabsTrigger>
-                {PIPELINE.map((s) => (
-                  <TabsTrigger key={s} value={s} className="text-xs h-6 px-2.5">
-                    {LEAD_STATUS_CONFIG[s].label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <div className="w-full lg:w-auto overflow-x-auto scrollbar-none">
+              <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as LeadStatus | 'all')}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs h-6 px-2.5">Alle</TabsTrigger>
+                  {PIPELINE.map((s) => (
+                    <TabsTrigger key={s} value={s} className="text-xs h-6 px-2.5">
+                      {LEAD_STATUS_CONFIG[s].label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
           )}
 
-          <div className="ml-auto">
+          <div className="lg:ml-auto">
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
               <TabsList className="h-8">
                 <TabsTrigger value="kanban" className="text-xs h-6 px-2.5">Kanban</TabsTrigger>
@@ -438,8 +441,8 @@ export function Leads() {
         {/* List view */}
         {viewMode === 'list' && (
           <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2 border-b border-border-subtle">
+            {/* Desktop kolomkoppen */}
+            <div className="hidden lg:grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2 border-b border-border-subtle">
               <button
                 onClick={() => toggleSort('companyName')}
                 className={cn('text-xs font-medium text-left transition-colors flex items-center gap-1', sortKey === 'companyName' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary')}
@@ -472,30 +475,64 @@ export function Leads() {
             <div className="divide-y divide-border-subtle">
               {filtered.map((lead) => {
                 const cfg = LEAD_STATUS_CONFIG[lead.status]
+                const initials = lead.companyName.charAt(0).toUpperCase()
                 return (
-                  <div
-                    key={lead.id}
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                    className="grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center cursor-pointer"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
-                      <p className="text-xs text-text-muted truncate">{lead.contactPerson}</p>
+                  <div key={lead.id}>
+                    {/* Desktop rij */}
+                    <div
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                      className="hidden lg:grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
+                        <p className="text-xs text-text-muted truncate">{lead.contactPerson}</p>
+                      </div>
+                      <div>
+                        <Badge className={cn('text-xs border font-medium', cfg.badge)}>
+                          {cfg.label}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-text-secondary">
+                        {lead.estimatedValue != null ? `€${lead.estimatedValue.toLocaleString('nl-NL')}` : '—'}
+                      </div>
+                      <div className="text-sm text-text-muted capitalize">
+                        {lead.source ?? '—'}
+                      </div>
+                      <div className="text-sm text-text-muted">
+                        {lead.lastContactedAt ? lastContactLabel(lead.lastContactedAt) : '—'}
+                      </div>
                     </div>
-                    <div>
-                      <Badge className={cn('text-xs border font-medium', cfg.badge)}>
-                        {cfg.label}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-text-secondary">
-                      {lead.estimatedValue != null ? `€${lead.estimatedValue.toLocaleString('nl-NL')}` : '—'}
-                    </div>
-                    <div className="text-sm text-text-muted capitalize">
-                      {lead.source ?? '—'}
-                    </div>
-                    <div className="text-sm text-text-muted">
-                      {lead.lastContactedAt ? lastContactLabel(lead.lastContactedAt) : '—'}
-                    </div>
+
+                    {/* Mobile card */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                      className="lg:hidden w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-md bg-accent-blue/15 flex items-center justify-center shrink-0 border border-accent-blue/25">
+                          <span className="text-sm font-semibold text-accent-blue">{initials}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
+                            <Badge className={cn('text-xs border font-medium', cfg.badge)}>
+                              {cfg.label}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-text-muted truncate mt-0.5">
+                            {lead.contactPerson}
+                            {lead.estimatedValue != null && (
+                              <> · <span className="text-text-secondary font-medium">€{lead.estimatedValue.toLocaleString('nl-NL')}</span></>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-text-muted mt-0.5">
+                            {lead.lastContactedAt ? lastContactLabel(lead.lastContactedAt) : 'Nog geen contact'}
+                            {lead.source && <> · <span className="capitalize">{lead.source}</span></>}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
                   </div>
                 )
               })}

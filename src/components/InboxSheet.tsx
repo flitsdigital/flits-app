@@ -26,7 +26,7 @@ export function InboxSheet() {
     <Sheet open={inboxOpen} onOpenChange={(v) => !v && closeInbox()}>
       <SheetContent
         side="right"
-        className="w-[380px] sm:w-[380px] p-0 flex flex-col bg-surface-1 border-border-subtle"
+        className="w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-surface-1 border-border-subtle"
       >
         <SheetHeader className="px-4 py-3 border-b border-border-subtle shrink-0">
           <div className="flex items-center justify-between">

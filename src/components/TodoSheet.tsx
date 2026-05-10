@@ -235,7 +235,7 @@ export function TodoSheet() {
     <Sheet open={todoOpen} onOpenChange={(v) => !v && closeTodo()}>
       <SheetContent
         side="right"
-        className="w-[400px] sm:w-[400px] p-0 flex flex-col bg-surface-1 border-border-subtle"
+        className="w-full sm:w-[400px] sm:max-w-[400px] p-0 flex flex-col bg-surface-1 border-border-subtle"
       >
         <SheetHeader className="px-4 py-3 border-b border-border-subtle shrink-0">
           <div className="flex items-center justify-between">

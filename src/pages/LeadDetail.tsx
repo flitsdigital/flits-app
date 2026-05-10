@@ -180,7 +180,7 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
         </button>
       ) : (
         <form onSubmit={handleSubmit} className="bg-surface-3 border border-border-default rounded-xl p-4 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Type</Label>
               <Select value={type} onValueChange={(v) => setType(v as ContactMomentType)}>
@@ -362,9 +362,9 @@ export function LeadDetail() {
 
   if (loading || !lead) {
     return (
-      <div className="px-6 py-6 flex flex-col gap-4">
+      <div className="px-4 lg:px-6 py-4 lg:py-6 flex flex-col gap-4">
         <div className="h-8 w-48 bg-surface-2 rounded animate-pulse" />
-        <div className="grid grid-cols-[320px_1fr] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
           <div className="h-64 bg-surface-2 rounded-xl animate-pulse" />
           <div className="h-64 bg-surface-2 rounded-xl animate-pulse" />
         </div>
@@ -395,8 +395,8 @@ export function LeadDetail() {
         }
       />
 
-      <div className="px-6 py-5">
-        <div className="grid grid-cols-[320px_1fr] gap-6 items-start">
+      <div className="px-4 lg:px-6 py-4 lg:py-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 lg:gap-6 items-start">
 
           {/* Left: Info panel */}
           <div className="flex flex-col gap-4">
@@ -467,11 +467,11 @@ export function LeadDetail() {
           </div>
 
           {/* Right: Contact log */}
-          <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-surface-2 border border-border-subtle rounded-xl p-4 lg:p-5">
+            <div className="flex items-center justify-between mb-4 lg:mb-5">
               <h2 className="text-sm font-semibold text-text-primary">Contacthistorie</h2>
             </div>
-            <Separator className="bg-border-subtle mb-5" />
+            <Separator className="bg-border-subtle mb-4 lg:mb-5" />
             <ContactLog
               leadId={lead.id}
               onLastContactUpdate={(date) => updateLead(lead.id, { lastContactedAt: date })}

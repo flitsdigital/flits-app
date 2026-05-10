@@ -95,7 +95,7 @@ export function MilestoneModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="lg:max-w-md">
         <DialogHeader>
           <DialogTitle>{initial ? 'Termijn bewerken' : 'Termijn / factuur'}</DialogTitle>
         </DialogHeader>
@@ -104,7 +104,7 @@ export function MilestoneModal({
             <Label htmlFor="ms-label">Label</Label>
             <Input id="ms-label" value={label} onChange={(e) => setLabel(e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ms-pct">% van budget (optioneel)</Label>
               <Input
@@ -151,8 +151,8 @@ export function MilestoneModal({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={onClose}>
+          <div className="sticky bottom-0 -mx-4 lg:-mx-6 -mb-4 lg:-mb-6 px-4 lg:px-6 py-3 bg-background border-t border-border-subtle flex justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <Button type="button" variant="ghost" onClick={onClose} className="hidden sm:inline-flex">
               Annuleren
             </Button>
             <Button type="submit">Opslaan</Button>

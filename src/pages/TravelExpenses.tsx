@@ -8,13 +8,14 @@ import {
   parseISO, isWithinInterval,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check, ChevronsUpDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, Check, ChevronsUpDown, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { travelExpensesDb } from '../lib/travelExpensesDb'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
 import { useTravelExpensesData } from '../hooks/useTravelExpensesData'
+import { useIsMobile } from '../hooks/useBreakpoint'
 import { PageHeader } from '../components/PageHeader'
 import type { TravelExpense, UserProfile } from '../types'
 import clsx from 'clsx'
@@ -27,6 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DatePickerButton } from '@/components/ui/date-picker-button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 const RATE = 0.23
@@ -268,7 +271,7 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="lg:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Rit bewerken' : 'Rit toevoegen'}</DialogTitle>
         </DialogHeader>
@@ -296,7 +299,7 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
           </div>
 
           {/* Van → Naar */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="from">Van</Label>
               <Input id="from" value={from} onChange={e => setFrom(e.target.value)} required placeholder="Vertrekpunt" />
@@ -308,7 +311,7 @@ function ExpenseModal({ expense, initialDate, onClose, onSaved, onDelete }: { ex
           </div>
 
           {/* Km + retour */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="km">Km (enkele reis)</Label>
               <Input id="km" type="number" value={kilometers} onChange={e => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" />
@@ -422,7 +425,7 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="lg:max-w-md">
         <DialogHeader>
           <DialogTitle>Rit toevoegen voor {dates.length} datum{dates.length !== 1 ? 's' : ''}</DialogTitle>
           <p className="text-xs text-muted-foreground">Dezelfde rit wordt opgeslagen voor elke geselecteerde dag</p>
@@ -454,7 +457,7 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
           )}
 
           {/* Van → Naar */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="bulk-from">Van</Label>
               <Input id="bulk-from" value={from} onChange={e => setFrom(e.target.value)} required placeholder="Vertrekpunt" />
@@ -466,7 +469,7 @@ function BulkExpenseModal({ dates, onClose, onSaved }: { dates: string[]; onClos
           </div>
 
           {/* Km + retour */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="bulk-km">Km (enkele reis)</Label>
               <Input id="bulk-km" type="number" value={kilometers} onChange={e => setKilometers(e.target.value)} required min="0" step="0.1" placeholder="0" />
@@ -607,6 +610,111 @@ function WeekView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick
   )
 }
 
+// ─── Agenda view (mobile) ─────────────────────────────────────────────────────
+
+function AgendaView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick, selectMode, selectedDates, onDateToggle }: {
+  expenses: TravelExpense[]
+  range: DateRange
+  clients: { id: string; companyName: string }[]
+  users: UserProfile[]
+  isAdmin: boolean
+  onEdit: (e: TravelExpense) => void
+  onDayClick: (date: string) => void
+  selectMode: boolean
+  selectedDates: Set<string>
+  onDateToggle: (date: string) => void
+}) {
+  const days = eachDayOfInterval({ start: range.start, end: range.end })
+  const daysWithData = days.filter((d) => {
+    if (selectMode) return true
+    return expenses.some((e) => isSameDay(parseISO(e.date), d))
+  })
+  const visibleDays = daysWithData.length > 0 ? daysWithData : days
+
+  return (
+    <div className="bg-surface-1 border border-border-subtle rounded-xl overflow-hidden divide-y divide-border-subtle">
+      {visibleDays.map((day) => {
+        const dateStr = format(day, 'yyyy-MM-dd')
+        const dayExpenses = expenses.filter((e) => isSameDay(parseISO(e.date), day))
+        const dayKm = dayExpenses.reduce((s, e) => s + totalKm(e), 0)
+        const dayAmount = dayExpenses.reduce((s, e) => s + amount(e), 0)
+        const selected = selectedDates.has(dateStr)
+        const today = isToday(day)
+        return (
+          <div key={day.toISOString()} className={clsx('px-4 py-3', selected && 'bg-accent-blue/[0.06]')}>
+            <button
+              type="button"
+              onClick={() => selectMode ? onDateToggle(dateStr) : onDayClick(dateStr)}
+              className="w-full flex items-center justify-between gap-3 text-left"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                {selectMode && (
+                  <div className={clsx(
+                    'w-5 h-5 rounded border flex items-center justify-center shrink-0',
+                    selected ? 'bg-accent-blue border-accent-blue' : 'border-border-default'
+                  )}>
+                    {selected && <Check size={12} className="text-white" />}
+                  </div>
+                )}
+                <div className={clsx('flex flex-col items-center justify-center w-10 h-10 rounded-md shrink-0', today ? 'bg-accent-blue text-white' : 'bg-surface-2 text-text-primary')}>
+                  <span className="text-[10px] uppercase font-medium leading-none opacity-80">{format(day, 'EEE', { locale: nl })}</span>
+                  <span className="text-sm font-semibold leading-none mt-0.5">{format(day, 'd')}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">{format(day, 'EEEE d MMMM', { locale: nl })}</p>
+                  {dayExpenses.length > 0 ? (
+                    <p className="text-xs text-text-muted">{dayKm} km · {fmt(dayAmount)}</p>
+                  ) : (
+                    <p className="text-xs text-text-muted">{selectMode ? 'Tik om te selecteren' : 'Geen ritten'}</p>
+                  )}
+                </div>
+              </div>
+              {!selectMode && dayExpenses.length === 0 && (
+                <Plus size={16} className="text-text-muted shrink-0" />
+              )}
+            </button>
+
+            {dayExpenses.length > 0 && !selectMode && (
+              <div className="mt-2 space-y-1.5 pl-[52px]">
+                {dayExpenses.map((e) => {
+                  const client = clients.find((c) => c.id === e.clientId)
+                  const user = isAdmin ? users.find((u) => u.id === e.userId) : null
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => onEdit(e)}
+                      className="w-full text-left bg-surface-2 hover:bg-white/[0.04] border border-border-subtle rounded-md px-3 py-2 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 text-sm text-text-primary">
+                        <span className="truncate">{e.from}</span>
+                        <ArrowRight size={11} className="text-text-muted shrink-0" />
+                        <span className="truncate">{e.to}</span>
+                        {e.returnTrip && <RotateCcw size={10} className="text-text-muted shrink-0 ml-auto" />}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-1 text-xs text-text-muted">
+                        <span className="truncate">
+                          {totalKm(e)} km{e.returnTrip ? ` (${e.kilometers}×2)` : ''}
+                          {client && ` · ${client.companyName}`}
+                          {user && ` · ${user.name ?? user.email}`}
+                        </span>
+                        <span className="text-text-primary font-medium shrink-0">{fmt(amount(e))}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {visibleDays.length === 0 && (
+        <div className="px-4 py-8 text-center text-xs text-text-muted">Geen ritten in deze periode</div>
+      )}
+    </div>
+  )
+}
+
 // ─── Month view ───────────────────────────────────────────────────────────────
 
 function MonthView({ expenses, range, clients, users, isAdmin, onEdit, onDayClick, selectMode, selectedDates, onDateToggle }: {
@@ -705,6 +813,7 @@ export function TravelExpenses() {
   const clients = useStore((s) => s.clients)
   const profile = useAuthStore((s) => s.profile)
   const isAdmin = profile?.role === 'admin'
+  const isMobile = useIsMobile()
   const now = new Date()
   const presets = PRESETS(now)
 
@@ -799,82 +908,143 @@ export function TravelExpenses() {
         subtitle={rangeLabel}
         actions={
           <>
-            <div className="relative" ref={exportRef}>
+            {/* Desktop: full button row */}
+            <div className="hidden lg:flex items-center gap-1.5">
+              <div className="relative" ref={exportRef}>
+                <button
+                  onClick={() => setShowExport((v) => !v)}
+                  disabled={filtered.length === 0}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed text-xs rounded transition-colors"
+                >
+                  <Download size={12} /> Exporteren <ChevronDown size={11} />
+                </button>
+                {showExport && (
+                  <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
+                    <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                      <Sheet size={12} className="text-accent-green" /> CSV exporteren
+                    </button>
+                    <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
+                      <FileText size={12} className="text-accent-red" /> PDF exporteren
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
-                onClick={() => setShowExport((v) => !v)}
-                disabled={filtered.length === 0}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed text-xs rounded transition-colors"
+                onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
+                className={clsx('flex items-center gap-1.5 px-2.5 py-1 border text-xs rounded transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-2 border-border-subtle text-text-secondary hover:text-text-primary')}
               >
-                <Download size={12} /> Exporteren <ChevronDown size={11} />
+                <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
               </button>
-              {showExport && (
-                <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
-                  <button onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                    <Sheet size={12} className="text-accent-green" /> CSV exporteren
-                  </button>
-                  <button onClick={() => { exportPDF(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
-                    <FileText size={12} className="text-accent-red" /> PDF exporteren
-                  </button>
-                </div>
+              {!selectMode && (
+                <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
+                  <Plus size={12} /> Rit toevoegen
+                </button>
               )}
             </div>
-            <button
-              onClick={() => { setSelectMode((v) => !v); setSelectedDates(new Set()) }}
-              className={clsx('flex items-center gap-1.5 px-2.5 py-1 border text-xs rounded transition-colors', selectMode ? 'bg-accent-blue/15 border-accent-blue/40 text-accent-blue' : 'bg-surface-2 border-border-subtle text-text-secondary hover:text-text-primary')}
-            >
-              <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
-            </button>
-            {!selectMode && (
-              <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
-                <Plus size={12} /> Rit toevoegen
-              </button>
-            )}
+
+            {/* Mobile: only "Klaar" when in select mode + overflow menu */}
+            <div className="flex lg:hidden items-center gap-1.5">
+              {selectMode ? (
+                <button
+                  onClick={() => { setSelectMode(false); setSelectedDates(new Set()) }}
+                  className="flex items-center gap-1.5 px-3 h-8 bg-accent-blue/15 border border-accent-blue/40 text-accent-blue text-xs font-medium rounded transition-colors"
+                >
+                  Klaar
+                </button>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8">
+                      <MoreHorizontal size={15} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuLabel className="text-xs">Acties</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { setSelectMode(true); setSelectedDates(new Set()) }}>
+                      <CalendarDays size={13} className="mr-2" /> Datums selecteren
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={filtered.length === 0}
+                      onClick={() => exportCSV(filtered, clients, users, rangeLabel)}
+                    >
+                      <Sheet size={13} className="mr-2 text-accent-green" /> CSV exporteren
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={filtered.length === 0}
+                      onClick={() => { void exportPDF(filtered, clients, users, rangeLabel) }}
+                    >
+                      <FileText size={13} className="mr-2 text-accent-red" /> PDF exporteren
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </>
         }
       />
-      <div className="px-6 py-5 max-w-5xl mx-auto">
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-5xl mx-auto">
 
       {/* Admin: user selector */}
       {isAdmin && (
-        <div className="flex items-center gap-2 mb-4 p-3 bg-surface-1 border border-border-subtle rounded-xl">
-          <Users size={14} className="text-text-muted flex-shrink-0" />
-          <span className="text-xs text-text-muted">Gebruiker:</span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setSelectedUserId('all')}
-              className={clsx('px-3 py-1 rounded-lg text-xs font-medium transition-colors', selectedUserId === 'all' ? 'bg-accent-blue text-white' : 'bg-white/[0.05] text-text-secondary hover:text-text-primary')}
-            >
-              Alle gebruikers
-            </button>
-            {users.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => setSelectedUserId(u.id)}
-                className={clsx('px-3 py-1 rounded-lg text-xs font-medium transition-colors', selectedUserId === u.id ? 'bg-accent-blue text-white' : 'bg-white/[0.05] text-text-secondary hover:text-text-primary')}
-              >
-                {u.name ?? u.email}
-              </button>
-            ))}
+        <>
+          {/* Mobile: compact Select */}
+          <div className="flex lg:hidden items-center gap-2 mb-3">
+            <Users size={14} className="text-text-muted flex-shrink-0" />
+            <Select value={selectedUserId} onValueChange={(v) => setSelectedUserId(v as string)}>
+              <SelectTrigger className="h-9 text-sm flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle gebruikers</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name ?? u.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
+          {/* Desktop: chip row */}
+          <div className="hidden lg:flex items-center gap-2 mb-4 p-3 bg-surface-1 border border-border-subtle rounded-xl">
+            <Users size={14} className="text-text-muted flex-shrink-0" />
+            <span className="text-xs text-text-muted">Gebruiker:</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setSelectedUserId('all')}
+                className={clsx('px-3 py-1 rounded-lg text-xs font-medium transition-colors', selectedUserId === 'all' ? 'bg-accent-blue text-white' : 'bg-white/[0.05] text-text-secondary hover:text-text-primary')}
+              >
+                Alle gebruikers
+              </button>
+              {users.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setSelectedUserId(u.id)}
+                  className={clsx('px-3 py-1 rounded-lg text-xs font-medium transition-colors', selectedUserId === u.id ? 'bg-accent-blue text-white' : 'bg-white/[0.05] text-text-secondary hover:text-text-primary')}
+                >
+                  {u.name ?? u.email}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Controls bar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* Period nav */}
         <div className="flex items-center bg-surface-2 border border-border-subtle rounded p-0.5">
-          <button onClick={() => navigate(-1)} className="p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
-            <ChevronLeft size={13} />
+          <button onClick={() => navigate(-1)} className="p-1.5 lg:p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
+            <ChevronLeft size={14} />
           </button>
-          <span className="text-xs font-medium text-text-primary px-2 min-w-[140px] text-center">{rangeLabel}</span>
-          <button onClick={() => navigate(1)} className="p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
-            <ChevronRight size={13} />
+          <span className="text-xs font-medium text-text-primary px-2 min-w-[120px] lg:min-w-[140px] text-center">{rangeLabel}</span>
+          <button onClick={() => navigate(1)} className="p-1.5 lg:p-1 text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors">
+            <ChevronRight size={14} />
           </button>
         </div>
 
         {/* Presets dropdown */}
         <div className="relative" ref={presetsRef}>
-          <button onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary text-xs rounded transition-colors">
+          <button onClick={() => setShowPresets((v) => !v)} className="flex items-center gap-1.5 px-2.5 h-8 lg:h-auto lg:py-1 bg-surface-2 border border-border-subtle text-text-secondary hover:text-text-primary text-xs rounded transition-colors">
             {range.label} <ChevronDown size={11} />
           </button>
           {showPresets && (
@@ -889,16 +1059,16 @@ export function TravelExpenses() {
           )}
         </div>
 
-        {/* View toggle */}
+        {/* View toggle (desktop: week/month; mobile: not needed, agenda is the only mobile view) */}
         <Tabs value={viewMode} onValueChange={(v) => {
           const m = v as ViewMode
           setViewMode(m)
           if (m === 'week') setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` })
           else setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) })
         }} className="ml-auto">
-          <TabsList className="h-7 px-1">
-            <TabsTrigger value="week" className="text-xs h-6 px-1.5">Week</TabsTrigger>
-            <TabsTrigger value="month" className="text-xs h-6 px-1.5">Maand</TabsTrigger>
+          <TabsList className="h-8 lg:h-7 px-1">
+            <TabsTrigger value="week" className="text-xs h-7 lg:h-6 px-2 lg:px-1.5">Week</TabsTrigger>
+            <TabsTrigger value="month" className="text-xs h-7 lg:h-6 px-2 lg:px-1.5">Maand</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -928,18 +1098,17 @@ export function TravelExpenses() {
               const uKm = userExpenses.reduce((s, e) => s + totalKm(e), 0)
               const uAmount = userExpenses.reduce((s, e) => s + amount(e), 0)
               return (
-                <div key={u.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-surface-0 border border-border-subtle flex items-center justify-center">
+                <div key={u.id} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="w-6 h-6 rounded bg-surface-0 border border-border-subtle flex items-center justify-center shrink-0">
                       <span className="text-xs font-medium text-text-secondary">{(u.name ?? u.email).charAt(0).toUpperCase()}</span>
                     </div>
-                    <span className="text-sm text-text-primary">{u.name ?? u.email}</span>
-                    <span className="text-xs text-text-muted">{userExpenses.length} rit{userExpenses.length !== 1 ? 'ten' : ''}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary truncate">{u.name ?? u.email}</p>
+                      <p className="text-xs text-text-muted">{userExpenses.length} rit{userExpenses.length !== 1 ? 'ten' : ''} · {uKm} km</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-right">
-                    <span className="text-xs text-text-muted">{uKm} km</span>
-                    <span className="text-sm font-semibold text-text-primary">{fmt(uAmount)}</span>
-                  </div>
+                  <span className="text-sm font-semibold text-text-primary shrink-0 tabular-nums">{fmt(uAmount)}</span>
                 </div>
               )
             })}
@@ -947,17 +1116,19 @@ export function TravelExpenses() {
         </div>
       )}
 
-      {/* Calendar */}
+      {/* Calendar / Agenda */}
       {loading ? (
         <div className="flex justify-center py-16"><div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" /></div>
+      ) : isMobile ? (
+        <AgendaView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} selectMode={selectMode} selectedDates={selectedDates} onDateToggle={toggleDate} />
       ) : viewMode === 'week' ? (
         <WeekView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} selectMode={selectMode} selectedDates={selectedDates} onDateToggle={toggleDate} />
       ) : (
         <MonthView expenses={filtered} range={range} clients={clients} users={users} isAdmin={isAdmin} onEdit={setEditExpense} onDayClick={handleDayClick} selectMode={selectMode} selectedDates={selectedDates} onDateToggle={toggleDate} />
       )}
 
-      {/* Lijst onder kalender */}
-      {filtered.length > 0 && (
+      {/* Lijst onder kalender (desktop only — agenda toont al per-rit op mobiel) */}
+      {filtered.length > 0 && !isMobile && (
         <div className="mt-4 bg-surface-1 border border-border-subtle rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border-subtle">
             <p className="text-xs font-medium text-text-secondary">{filtered.length} rit{filtered.length !== 1 ? 'ten' : ''} in deze periode</p>
@@ -1000,19 +1171,31 @@ export function TravelExpenses() {
 
       {/* Floating bulk bar */}
       {selectMode && selectedDates.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl px-4 py-3">
-          <span className="text-sm text-text-primary font-medium">{selectedDates.size} datum{selectedDates.size !== 1 ? 's' : ''} geselecteerd</span>
+        <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+0.75rem)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 lg:gap-3 bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl px-3 lg:px-4 py-2.5 lg:py-3 max-w-[calc(100vw-1rem)]">
+          <span className="text-xs lg:text-sm text-text-primary font-medium whitespace-nowrap">{selectedDates.size} datum{selectedDates.size !== 1 ? 's' : ''}</span>
           <div className="w-px h-5 bg-border-subtle" />
-          <button onClick={() => setSelectedDates(new Set())} className="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
-            <X size={12} /> Deselecteer
+          <button onClick={() => setSelectedDates(new Set())} className="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 shrink-0">
+            <X size={12} /> <span className="hidden sm:inline">Deselecteer</span>
           </button>
           <button
             onClick={() => setShowBulk(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs lg:text-sm font-medium rounded-xl transition-colors shrink-0"
           >
-            <Plus size={14} /> Rit toevoegen voor alle
+            <Plus size={14} /> <span className="hidden sm:inline">Rit toevoegen voor alle</span><span className="sm:hidden">Toevoegen</span>
           </button>
         </div>
+      )}
+
+      {/* Mobile FAB: snelle "Rit toevoegen" */}
+      {!selectMode && (
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          aria-label="Rit toevoegen"
+          className="lg:hidden fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] right-4 z-30 w-14 h-14 rounded-full bg-accent-blue hover:bg-accent-blue/90 text-white shadow-xl flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <Plus size={24} />
+        </button>
       )}
 
       {/* Modals */}

@@ -20,10 +20,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Client, ClientInvoice } from '../types'
 import { cn } from '@/lib/utils'
-
-const COL_WIDTH = 44 // pixels per week column
-const ROW_HEIGHT = 52
-const LABEL_WIDTH = 220
+import { useIsSmall } from '../hooks/useBreakpoint'
+import { Info } from 'lucide-react'
 
 type ViewMode = 'weeks' | 'months'
 
@@ -88,6 +86,11 @@ export function Timeline() {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'paused'>('all')
 
+  const isSmall = useIsSmall()
+  const COL_WIDTH = isSmall ? 36 : 44
+  const LABEL_WIDTH = isSmall ? 140 : 220
+  const ROW_HEIGHT = 52
+
   const { start, end, weeks, today } = useTimeline(viewMode)
 
   const todayOffset = differenceInDays(today, start)
@@ -132,42 +135,48 @@ export function Timeline() {
         actions={
           <>
             <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as 'all' | 'active' | 'paused')}>
-              <TabsList className="h-7 p-0.5">
-                <TabsTrigger value="all" className="text-xs h-6 px-2.5">Alle</TabsTrigger>
-                <TabsTrigger value="active" className="text-xs h-6 px-2.5">Actief</TabsTrigger>
-                <TabsTrigger value="paused" className="text-xs h-6 px-2.5">Gepauzeerd</TabsTrigger>
+              <TabsList className="h-8 lg:h-7 p-0.5">
+                <TabsTrigger value="all" className="text-xs h-7 lg:h-6 px-2.5">Alle</TabsTrigger>
+                <TabsTrigger value="active" className="text-xs h-7 lg:h-6 px-2.5">Actief</TabsTrigger>
+                <TabsTrigger value="paused" className="text-xs h-7 lg:h-6 px-2.5">Gepauzeerd</TabsTrigger>
               </TabsList>
             </Tabs>
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList className="h-7 p-0.5">
-                <TabsTrigger value="weeks" className="text-xs h-6 px-2.5">26 weken</TabsTrigger>
-                <TabsTrigger value="months" className="text-xs h-6 px-2.5">52 weken</TabsTrigger>
+              <TabsList className="h-8 lg:h-7 p-0.5">
+                <TabsTrigger value="weeks" className="text-xs h-7 lg:h-6 px-2.5">26 weken</TabsTrigger>
+                <TabsTrigger value="months" className="text-xs h-7 lg:h-6 px-2.5">52 weken</TabsTrigger>
               </TabsList>
             </Tabs>
           </>
         }
       />
-      <div className="px-6 py-5 max-w-full">
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-full">
+
+      {/* Mobile breakpoint banner */}
+      <div className="lg:hidden mb-3 flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs text-blue-300">
+        <Info size={14} className="shrink-0 mt-0.5" />
+        <span>Timeline werkt het beste op een groter scherm. Veeg horizontaal om door de tijd te scrollen.</span>
+      </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-5 mb-5 text-xs text-text-muted">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-3 lg:gap-5 mb-4 lg:mb-5 text-xs text-text-muted overflow-x-auto scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-3 h-3 rounded-sm bg-green-500/20 border border-green-500/30" />
           Actief
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-3 h-3 rounded-sm bg-orange-500/20 border border-orange-500/30" />
           Binnenkort factureren
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-3 h-3 rounded-sm bg-red-500/20 border border-red-500/30" />
           Factuur verlopen
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-3 h-3 rounded-sm bg-zinc-600/30 border border-zinc-600/40" />
           Gepauzeerd
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <div className="w-2 h-2 rounded-full bg-white" />
           Factuurmoment
         </div>
@@ -256,9 +265,9 @@ export function Timeline() {
                   className="flex border-b border-border-subtle hover:bg-white/[0.01] transition-colors group"
                   style={{ height: ROW_HEIGHT }}
                 >
-                  {/* Label */}
+                  {/* Label (sticky left) */}
                   <div
-                    className="flex items-center gap-3 px-4 border-r border-border-subtle shrink-0 cursor-pointer"
+                    className="flex items-center gap-2 lg:gap-3 px-3 lg:px-4 border-r border-border-subtle shrink-0 cursor-pointer sticky left-0 z-10 bg-surface-2 group-hover:bg-surface-2"
                     style={{ width: LABEL_WIDTH }}
                     onClick={() => navigate(`/clients/${client.id}`)}
                   >

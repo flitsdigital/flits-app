@@ -177,7 +177,7 @@ function UserModal({
           {role === 'default' && (
             <div className="space-y-2">
               <Label>Toegang tot pagina's</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {PAGE_OPTIONS.map(({ id, label }) => (
                   <div key={id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border rounded-md px-3 py-2">
                     <Label htmlFor={`page-${id}`} className="font-normal cursor-pointer text-sm">{label}</Label>

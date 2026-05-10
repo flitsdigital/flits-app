@@ -142,28 +142,28 @@ export function ClientDetail() {
           { label: client.companyName },
         ]}
       />
-      <div className="px-6 py-5 max-w-5xl mx-auto">
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-accent-blue/20 flex items-center justify-center">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-accent-blue/20 flex items-center justify-center shrink-0">
               <span className="text-sm font-bold text-accent-blue">
                 {client.companyName.charAt(0)}
               </span>
             </div>
-            <div>
-              <h1 className="text-base font-semibold text-text-primary">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base font-semibold text-text-primary truncate">
                 {client.companyName}
               </h1>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <ClientTypeBadge type={client.clientType} />
                 <StatusBadge status={client.status} />
                 {client.packageType && (
-                  <span className="text-xs text-text-muted">{client.packageType}</span>
+                  <span className="text-xs text-text-muted truncate">{client.packageType}</span>
                 )}
               </div>
               {stats && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-1.5 mt-2">
                   {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
                     <>
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
@@ -199,21 +199,21 @@ export function ClientDetail() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setEditing(true)}
-              className="h-7 text-xs gap-1.5"
+              className="h-8 lg:h-7 text-xs gap-1.5"
             >
               <Edit2 size={13} />
-              Bewerken
+              <span className="hidden sm:inline">Bewerken</span>
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={() => setConfirmDelete(true)}
-              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25"
+              className="h-8 w-8 lg:h-7 lg:w-7 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25"
             >
               <Trash2 size={13} />
             </Button>
@@ -221,14 +221,14 @@ export function ClientDetail() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-          <TabsList className="h-9">
-            <TabsTrigger value="overview" className="text-xs">
+          <TabsList className="h-9 w-full sm:w-auto justify-start overflow-x-auto scrollbar-none">
+            <TabsTrigger value="overview" className="text-xs shrink-0">
               Overzicht
             </TabsTrigger>
-            <TabsTrigger value="billing" className="text-xs">
+            <TabsTrigger value="billing" className="text-xs shrink-0">
               Facturatie
             </TabsTrigger>
-            <TabsTrigger value="content" className="text-xs">
+            <TabsTrigger value="content" className="text-xs shrink-0">
               Content
             </TabsTrigger>
           </TabsList>
