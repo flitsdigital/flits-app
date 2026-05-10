@@ -15,6 +15,8 @@ import { ResetPassword } from './pages/ResetPassword'
 import { Settings } from './pages/Settings'
 import { TravelExpenses } from './pages/TravelExpenses'
 import { Projects } from './pages/Projects'
+import { Leads } from './pages/Leads'
+import { LeadDetail } from './pages/LeadDetail'
 import { useAuthStore } from './store/useAuthStore'
 import { useStore } from './store/useStore'
 
@@ -67,6 +69,11 @@ export default function App() {
 
             <Route element={<ProtectedRoute page="projects" />}>
               <Route path="projects" element={<Projects />} />
+            </Route>
+
+            <Route element={<ProtectedRoute page="leads" />}>
+              <Route path="leads" element={<Leads />} />
+              <Route path="leads/:id" element={<LeadDetail />} />
             </Route>
 
             {/* Settings: admin only */}

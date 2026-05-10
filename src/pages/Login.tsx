@@ -35,10 +35,10 @@ export function Login() {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2.5 mb-8 justify-center">
           <div className="w-8 h-8 rounded-lg bg-accent-blue flex items-center justify-center">
-            <span className="text-white text-sm font-bold">A</span>
+            <span className="text-white text-sm font-bold">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold text-text-primary leading-none">Agency CRM</p>
+            <p className="text-sm font-semibold text-text-primary leading-none">Flits Impact</p>
             <p className="text-xs text-text-muted mt-0.5">Social Media</p>
           </div>
         </div>

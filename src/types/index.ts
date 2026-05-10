@@ -1,5 +1,37 @@
 export type UserRole = 'admin' | 'default'
-export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects'
+export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects' | 'leads'
+
+// ── Leads ─────────────────────────────────────────────────────────────────────
+
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost'
+export type ContactMomentType = 'call' | 'email' | 'meeting' | 'other'
+
+export interface Lead {
+  id: string
+  companyName: string
+  contactPerson: string
+  email: string
+  phone?: string
+  source?: string
+  status: LeadStatus
+  assigneeId?: string
+  estimatedValue?: number
+  notes?: string
+  lastContactedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ContactMoment {
+  id: string
+  leadId: string
+  date: string
+  type: ContactMomentType
+  note: string
+  actorId?: string
+  actorEmail?: string
+  createdAt: string
+}
 
 export interface TravelExpense {
   id: string

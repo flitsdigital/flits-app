@@ -9,6 +9,7 @@ import {
   LogOut,
   Kanban,
   Zap,
+  UserPlus,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import type { AppPage } from "../types";
@@ -31,6 +32,7 @@ const ALL_NAV: {
   { to: "/content",    label: "Content",   icon: CalendarDays,    exact: false, page: "content"   },
   { to: "/reiskosten", label: "Reiskosten",icon: Car,             exact: false, page: "reiskosten"},
   { to: "/projects",   label: "Projecten", icon: Kanban,          exact: false, page: "projects"  },
+  { to: "/leads",      label: "Leads",     icon: UserPlus,        exact: false, page: "leads"     },
 ];
 
 function NavItem({ to, label, icon: Icon, exact }: { to: string; label: string; icon: React.ElementType; exact: boolean }) {

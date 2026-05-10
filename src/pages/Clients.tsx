@@ -22,7 +22,7 @@ type Filter = 'all' | 'active' | 'paused' | 'inactive'
 
 export function Clients() {
   usePageMeta('Klanten → Flits Impact', 'Beheer je klanten, contracten en facturatie.')
-  const { clients, addClient } = useStore()
+  const { clients, addClient, updateClient } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editClient, setEditClient] = useState<Client | undefined>()
   const [search, setSearch] = useState('')
@@ -137,7 +137,7 @@ export function Clients() {
                 <Link
                   key={c.id}
                   to={`/clients/${c.id}`}
-                  className="grid grid-cols-[1fr_140px_120px_140px_120px_60px] gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center"
+                  className="group grid grid-cols-[1fr_140px_120px_140px_120px_60px] gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-6 h-6 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
@@ -188,8 +188,13 @@ export function Clients() {
           open={showForm}
           onClose={() => { setShowForm(false); setEditClient(undefined) }}
           onSave={(data) => {
-            addClient(data)
-            toast.success(editClient ? 'Klant bijgewerkt' : 'Klant toegevoegd')
+            if (editClient) {
+              updateClient(editClient.id, data)
+              toast.success('Klant bijgewerkt')
+            } else {
+              addClient(data)
+              toast.success('Klant toegevoegd')
+            }
             setShowForm(false)
             setEditClient(undefined)
           }}

@@ -896,9 +896,9 @@ export function TravelExpenses() {
           if (m === 'week') setRange({ start: startOfWeek(anchorDate, { weekStartsOn: 1 }), end: endOfWeek(anchorDate, { weekStartsOn: 1 }), label: `Week ${format(anchorDate, 'w', { locale: nl })}` })
           else setRange({ start: startOfMonth(anchorDate), end: endOfMonth(anchorDate), label: format(anchorDate, 'MMMM yyyy', { locale: nl }) })
         }} className="ml-auto">
-          <TabsList className="h-7">
-            <TabsTrigger value="week" className="text-xs h-6 px-2.5">Week</TabsTrigger>
-            <TabsTrigger value="month" className="text-xs h-6 px-2.5">Maand</TabsTrigger>
+          <TabsList className="h-7 px-1">
+            <TabsTrigger value="week" className="text-xs h-6 px-1.5">Week</TabsTrigger>
+            <TabsTrigger value="month" className="text-xs h-6 px-1.5">Maand</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

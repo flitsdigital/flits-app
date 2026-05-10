@@ -23,8 +23,10 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 )
 
-// Admin client bypasses RLS — only used for admin user management operations.
-// Lazy-initialised so a missing key doesn't crash the whole module on import.
+// ⚠️  SECURITY NOTE: VITE_SUPABASE_SERVICE_ROLE_KEY is bundled into the client
+// and is therefore visible to anyone who inspects the network traffic or JS bundle.
+// This bypasses Row Level Security. Move admin operations to a Supabase Edge
+// Function or server-side API so the service role key never leaves the server.
 let _admin: ReturnType<typeof createClient> | null = null
 
 export function getSupabaseAdmin() {

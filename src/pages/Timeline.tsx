@@ -44,19 +44,6 @@ function useTimeline(viewMode: ViewMode) {
   return { start, end, weeks, today }
 }
 
-function clientColor(index: number): { bar: string; invoice: string } {
-  const colors = [
-    { bar: 'bg-blue-500/25 border-blue-500/40', invoice: 'bg-blue-400' },
-    { bar: 'bg-purple-500/25 border-purple-500/40', invoice: 'bg-purple-400' },
-    { bar: 'bg-emerald-500/25 border-emerald-500/40', invoice: 'bg-emerald-400' },
-    { bar: 'bg-amber-500/25 border-amber-500/40', invoice: 'bg-amber-400' },
-    { bar: 'bg-rose-500/25 border-rose-500/40', invoice: 'bg-rose-400' },
-    { bar: 'bg-cyan-500/25 border-cyan-500/40', invoice: 'bg-cyan-400' },
-    { bar: 'bg-indigo-500/25 border-indigo-500/40', invoice: 'bg-indigo-400' },
-  ]
-  return colors[index % colors.length]
-}
-
 function statusBarColor(client: Client, today: Date): string {
   if (client.status === 'paused') return 'bg-zinc-600/30 border-zinc-600/40'
   if (client.status === 'inactive') return 'bg-zinc-800/50 border-zinc-700/40'

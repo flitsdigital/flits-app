@@ -57,7 +57,6 @@ import {
   postStatusChipColor,
   postTypeLabel,
   postStatusLabel,
-  clientColor,
 } from "../lib/postHelpers";
 import type { Post, PostType } from "../types";
 
@@ -422,14 +421,6 @@ export function Content() {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
-
-  const clientColorMap = useMemo(() => {
-    const map: Record<string, ReturnType<typeof clientColor>> = {};
-    clients.forEach((c, i) => {
-      map[c.id] = clientColor(i);
-    });
-    return map;
-  }, [clients]);
 
   const clientMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1078,7 +1069,8 @@ export function Content() {
           {/* Verwijderen */}
           <button
             onClick={async () => {
-              if (!window.confirm(`${selectedPostIds.size} post${selectedPostIds.size !== 1 ? 's' : ''} verwijderen?`)) return
+              const aantal = selectedPostIds.size
+              if (!window.confirm(`${aantal} ${aantal === 1 ? 'post' : 'posts'} definitief verwijderen?`)) return
               await Promise.all([...selectedPostIds].map(id => deletePost(id)))
               setSelectedPostIds(new Set())
             }}

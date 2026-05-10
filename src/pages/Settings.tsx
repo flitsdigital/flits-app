@@ -24,6 +24,7 @@ const PAGE_OPTIONS: { id: AppPage; label: string }[] = [
   { id: 'content', label: 'Content' },
   { id: 'reiskosten', label: 'Reiskosten' },
   { id: 'projects', label: 'Projecten' },
+  { id: 'leads', label: 'Leads' },
 ]
 
 // ─── User modal ───────────────────────────────────────────────────────────────
@@ -322,7 +323,7 @@ export function Settings() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                     placeholder="Nieuw wachtwoord"
                   />
                 </div>

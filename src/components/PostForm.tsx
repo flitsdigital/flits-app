@@ -191,16 +191,10 @@ export function PostForm({
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token ?? anonKey
 
-    console.debug('[upload] bucket:', bucket)
-    console.debug('[upload] url:', `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`)
-    console.debug('[upload] file:', file.name, file.type, file.size, 'bytes')
-    console.debug('[upload] auth token type:', sessionData?.session?.access_token ? 'session' : 'anon key')
-
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 30_000)
 
     try {
-      console.debug('[upload] fetching...')
       const response = await fetch(
         `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`,
         {
@@ -216,14 +210,12 @@ export function PostForm({
           signal: controller.signal,
         }
       )
-      console.debug('[upload] response status:', response.status, response.statusText)
       if (!response.ok) {
         const err = await response.json().catch(() => null)
         console.error('[upload] error body:', err)
         throw new Error(err?.message ?? `Upload mislukt (HTTP ${response.status})`)
       }
       const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${fileName}`
-      console.debug('[upload] success, public url:', publicUrl)
       return publicUrl
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -239,11 +231,9 @@ export function PostForm({
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    console.debug('[handleFileChange] files selected:', files.length)
     if (!files.length) return
     const invalid = files.find((file) => !file.type.startsWith('image/'))
     if (invalid) {
-      console.warn('[handleFileChange] invalid file type:', invalid.type)
       setUploadError('Kies alleen afbeeldingen (jpg, png, webp, ...).')
       return
     }
@@ -253,12 +243,10 @@ export function PostForm({
     try {
       const uploadedUrls: string[] = []
       for (let i = 0; i < files.length; i++) {
-        console.debug(`[handleFileChange] uploading file ${i + 1}/${files.length}:`, files[i].name)
         const url = await uploadImage(files[i])
         uploadedUrls.push(url)
         setUploadProgress(Math.round(((i + 1) / files.length) * 90) + 10)
       }
-      console.debug('[handleFileChange] all uploads done, urls:', uploadedUrls)
       setForm((prev) => {
         const existing = prev.mediaUrls ?? (prev.mediaUrl ? [prev.mediaUrl] : [])
         const mediaUrls = [...existing, ...uploadedUrls]

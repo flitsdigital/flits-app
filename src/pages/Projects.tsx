@@ -7,7 +7,7 @@ import {
 import { projectsDb } from '../lib/projectsDb'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
-import { useProjectsData } from '../hooks/useProjectsData'
+import { useProjectsData, UserProfileLite } from '../hooks/useProjectsData'
 import clsx from 'clsx'
 import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus } from '../types'
 import { toast } from 'sonner'
@@ -53,10 +53,6 @@ const PROJECT_STATUS_CONFIG: Record<ProjectStatus, { label: string; cls: string 
   paused:    { label: 'Gepauzeerd',  cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25' },
   completed: { label: 'Afgerond',    cls: 'text-zinc-400  bg-zinc-500/10  border-zinc-500/25' },
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-interface UserProfile { id: string; email: string; name?: string | null }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -266,7 +262,7 @@ function TaskModal({
   task?: Task
   projectId: string
   defaultStatus?: TaskStatus
-  profiles: UserProfile[]
+  profiles: UserProfileLite[]
   onClose: () => void
   onSaved: (t: Task) => void
   onDeleted?: (id: string) => void
@@ -524,7 +520,7 @@ function TaskCard({
   onDragStart, onDragEnd,
 }: {
   task: Task
-  profiles: UserProfile[]
+  profiles: UserProfileLite[]
   onClick: () => void
   isDragging: boolean
   onDragStart: () => void
@@ -587,7 +583,7 @@ function KanbanBoard({
   tasks, profiles, onTaskClick, onAddTask, onStatusChange,
 }: {
   tasks: Task[]
-  profiles: UserProfile[]
+  profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
   onAddTask: (status: TaskStatus) => void
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void
@@ -704,7 +700,7 @@ function ListView({
   tasks, profiles, onTaskClick, onAddTask,
 }: {
   tasks: Task[]
-  profiles: UserProfile[]
+  profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
   onAddTask: (status: TaskStatus) => void
 }) {
@@ -828,7 +824,7 @@ function AllTasksView({
   tasks: Task[]
   projects: Project[]
   clients: ClientInfo[]
-  profiles: UserProfile[]
+  profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
 }) {
   const [collapsed, setCollapsed] = useState<Record<TaskStatus, boolean>>({

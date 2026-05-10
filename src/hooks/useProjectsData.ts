@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { projectsDb } from '../lib/projectsDb'
 import type { Project, Task, TaskStatus } from '../types'
 
-interface UserProfileLite {
+export interface UserProfileLite {
   id: string
   email: string
   name?: string | null
