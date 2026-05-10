@@ -1,13 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Plus, ChevronLeft, X, Trash2, Check, Flag,
   Folder, Circle, CircleDot, Eye, CheckCircle2,
   LayoutGrid, List, ChevronDown, ChevronsUpDown,
+  MessageSquare, Activity, Send, Zap,
 } from 'lucide-react'
-import { projectsDb } from '../lib/projectsDb'
+import { formatDistanceToNow, format } from 'date-fns'
+import { nl } from 'date-fns/locale'
+import { projectsDb, type TaskComment, type Sprint, type SprintStatus, type ProjectActivity } from '../lib/projectsDb'
 import { useStore } from '../store/useStore'
+import { useAuthStore } from '../store/useAuthStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useProjectsData, UserProfileLite } from '../hooks/useProjectsData'
+import { notificationsDb } from '../lib/notificationsDb'
+import { parseMentions } from '../components/MentionTextarea'
+import { MentionTextarea } from '../components/MentionTextarea'
 import clsx from 'clsx'
 import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus } from '../types'
 import { toast } from 'sonner'
@@ -280,13 +287,69 @@ function TaskModal({
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
+  // Comments
+  const [comments, setComments] = useState<TaskComment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
+  const modalProfile = useAuthStore(s => s.profile)
+
   useEffect(() => {
-    if (isEdit) loadSubtasks()
+    if (isEdit) { loadSubtasks(); loadComments() }
   }, [])
 
   async function loadSubtasks() {
     const data = await projectsDb.fetchTaskSubtasks(task!.id)
     setSubtasks(data)
+  }
+
+  async function loadComments() {
+    const data = await projectsDb.fetchTaskComments(task!.id)
+    setComments(data)
+  }
+
+  async function addComment() {
+    if (!newComment.trim() || !task || !modalProfile) return
+    setCommentLoading(true)
+    try {
+      const comment = await projectsDb.addTaskComment({
+        taskId: task.id,
+        authorId: modalProfile.id,
+        authorEmail: modalProfile.email,
+        authorName: modalProfile.name ?? null,
+        content: newComment.trim(),
+      })
+      setComments(prev => [...prev, comment])
+      setNewComment('')
+
+      // Parse @mentions and send notifications
+      const allProfiles = await projectsDb.fetchProfilesBasic()
+      const emails = parseMentions(newComment.trim(), allProfiles)
+      for (const email of emails) {
+        const target = allProfiles.find(p => p.email === email)
+        if (!target || target.email === modalProfile.email) continue
+        await notificationsDb.create({
+          userId: target.id,
+          actorEmail: modalProfile.email,
+          type: 'mention',
+          content: `${modalProfile.name ?? modalProfile.email} noemde jou in een opmerking op taak "${task.title}"`,
+          linkedType: 'task_comment',
+          linkedId: comment.id,
+        })
+      }
+
+      // Log activity
+      await projectsDb.logActivity({
+        projectId,
+        taskId: task.id,
+        actorEmail: modalProfile.email,
+        action: 'commented',
+        metadata: { taskTitle: task.title },
+      })
+    } catch {
+      // silent
+    } finally {
+      setCommentLoading(false)
+    }
   }
 
   async function handleSubmit() {
@@ -422,6 +485,68 @@ function TaskModal({
                 <button type="button" onClick={addSubtask} disabled={!newSubtask.trim()}
                   className="px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-text-secondary rounded-md transition-colors disabled:opacity-40">
                   <Plus size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Comments — only when editing */}
+          {isEdit && (
+            <div className="px-5 pb-4 border-t border-border-subtle pt-3">
+              <p className="text-xs font-medium text-text-muted mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                <MessageSquare size={11} />
+                Opmerkingen
+                {comments.length > 0 && <span className="font-normal">({comments.length})</span>}
+              </p>
+
+              {/* Comment list */}
+              {comments.length > 0 && (
+                <div className="space-y-3 mb-3">
+                  {comments.map(c => {
+                    const name = c.authorName ?? c.authorEmail.split('@')[0]
+                    return (
+                      <div key={c.id} className="flex gap-2.5">
+                        <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0">
+                          <span className="text-[9px] font-bold text-accent-blue">{name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className="text-xs font-medium text-text-primary">{name}</span>
+                            <span className="text-[10px] text-text-muted">
+                              {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true, locale: nl })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">{c.content}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* New comment */}
+              <div className="flex gap-2 items-start">
+                <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-[9px] font-bold text-accent-blue">
+                    {(modalProfile?.name ?? modalProfile?.email ?? 'U').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 relative">
+                  <MentionTextarea
+                    value={newComment}
+                    onChange={setNewComment}
+                    placeholder="Schrijf een opmerking... gebruik @ om iemand te taggen"
+                    rows={2}
+                    className="px-2.5 py-1.5 bg-white/[0.04] border border-border-subtle rounded-md placeholder-zinc-700 focus:border-zinc-600 transition-colors text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addComment}
+                  disabled={!newComment.trim() || commentLoading}
+                  className="p-1.5 bg-accent-blue hover:bg-blue-500 text-white rounded-md transition-colors disabled:opacity-40 shrink-0 mt-0.5"
+                >
+                  <Send size={12} />
                 </button>
               </div>
             </div>
@@ -819,29 +944,60 @@ function ListView({
 interface ClientInfo { id: string; companyName: string }
 
 function AllTasksView({
-  tasks, projects, clients, profiles, onTaskClick,
+  tasks, projects, clients, profiles, currentUserId, onTaskClick,
 }: {
   tasks: Task[]
   projects: Project[]
   clients: ClientInfo[]
   profiles: UserProfileLite[]
+  currentUserId?: string
   onTaskClick: (task: Task) => void
 }) {
+  const [myTasksOnly, setMyTasksOnly] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<TaskStatus, boolean>>({
     todo: false, in_progress: false, in_review: false, done: true,
   })
 
+  const filteredTasks = useMemo(() => {
+    if (!myTasksOnly || !currentUserId) return tasks
+    return tasks.filter((t) => t.assigneeId === currentUserId)
+  }, [tasks, myTasksOnly, currentUserId])
+
   const byStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], in_review: [], done: [] }
-    tasks.forEach(t => map[t.status].push(t))
+    filteredTasks.forEach(t => map[t.status].push(t))
     return map
-  }, [tasks])
+  }, [filteredTasks])
 
   const projectMap = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
   const clientMap  = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c])), [clients])
 
   return (
     <div className="space-y-2 pb-6">
+      {/* Mijn taken / Alle taken toggle */}
+      {currentUserId && (
+        <div className="flex items-center bg-surface-0 border border-border-subtle rounded-lg p-0.5 w-fit mb-4">
+          <button
+            onClick={() => setMyTasksOnly(false)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors',
+              !myTasksOnly ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            Alle taken
+          </button>
+          <button
+            onClick={() => setMyTasksOnly(true)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors',
+              myTasksOnly ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            Mijn taken
+          </button>
+        </div>
+      )}
+
       {TASK_STATUSES.map(({ id, label, Icon, color, ring }) => {
         const groupTasks = byStatus[id]
         const isCollapsed = collapsed[id]
@@ -1015,11 +1171,52 @@ function ProjectCard({ project, clientName, taskCount, onClick, onEdit }: {
   )
 }
 
+// ── Activity Row ───────────────────────────────────────────────────────────────
+
+const ACTION_LABELS: Record<string, string> = {
+  task_created:    'maakte taak aan',
+  status_changed:  'wijzigde status',
+  commented:       'voegde opmerking toe',
+  assigned:        'wees taak toe',
+  sprint_changed:  'wijzigde sprint',
+  task_deleted:    'verwijderde taak',
+}
+
+function ActivityRow({ activity }: { activity: ProjectActivity }) {
+  const actor = activity.actorEmail.split('@')[0]
+  const label = ACTION_LABELS[activity.action] ?? activity.action
+  const meta = activity.metadata ?? {}
+  const taskTitle = typeof meta.taskTitle === 'string' ? meta.taskTitle : undefined
+  const newStatus = typeof meta.newStatus === 'string' ? meta.newStatus : undefined
+
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-border-subtle/50 last:border-0">
+      <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0 mt-0.5">
+        <span className="text-[10px] font-bold text-accent-blue">{actor.charAt(0).toUpperCase()}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-text-secondary">
+          <span className="text-text-primary font-medium">{actor}</span>
+          {' '}{label}
+          {taskTitle && <span className="text-text-muted"> op &ldquo;<span className="text-text-secondary">{taskTitle}</span>&rdquo;</span>}
+          {activity.action === 'status_changed' && newStatus && (
+            <span className="text-text-muted"> → {newStatus}</span>
+          )}
+        </p>
+        <p className="text-[10px] text-text-muted mt-0.5">
+          {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true, locale: nl })}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function Projects() {
   usePageMeta('Projecten → Flits Impact', 'Beheer projecten en taken per klant in kanban of lijstweergave.')
   const clients = useStore(s => s.clients)
+  const profile = useAuthStore(s => s.profile)
 
   const {
     projects, setProjects,
@@ -1041,7 +1238,17 @@ export function Projects() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   // View toggle
-  const [boardView, setBoardView] = useState<'kanban' | 'list'>('kanban')
+  const [boardView, setBoardView] = useState<'kanban' | 'list' | 'activity'>('kanban')
+
+  // Sprints state
+  const [sprints, setSprints] = useState<Sprint[]>([])
+  const [selectedSprintId, setSelectedSprintId] = useState<string | 'all'>('all')
+  const [showSprintModal, setShowSprintModal] = useState(false)
+  const [editSprint, setEditSprint] = useState<Sprint | undefined>()
+
+  // Activity state
+  const [activities, setActivities] = useState<ProjectActivity[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
 
   // Modal state
   const [showProjectModal, setShowProjectModal] = useState(false)
@@ -1059,7 +1266,23 @@ export function Projects() {
   function openProject(project: Project) {
     setSelectedProject(project)
     loadProjectTasks(project.id)
+    // Load sprints for this project
+    projectsDb.fetchSprints(project.id).then(setSprints).catch(() => {})
+    setSelectedSprintId('all')
+    setBoardView('kanban')
   }
+
+  const loadActivity = useCallback(async (projectId: string) => {
+    setActivityLoading(true)
+    try {
+      const data = await projectsDb.fetchProjectActivity(projectId)
+      setActivities(data)
+    } catch {
+      // silent
+    } finally {
+      setActivityLoading(false)
+    }
+  }, [])
 
   function handleProjectSaved(p: Project) {
     setProjects(prev => {
@@ -1097,7 +1320,18 @@ export function Projects() {
   }
 
   async function handleStatusChange(taskId: string, newStatus: TaskStatus) {
+    const task = tasks.find(t => t.id === taskId)
     await updateTaskStatus(taskId, newStatus)
+    if (selectedProject && profile?.email && task) {
+      const statusLabel = TASK_STATUSES.find(s => s.id === newStatus)?.label ?? newStatus
+      projectsDb.logActivity({
+        projectId: selectedProject.id,
+        taskId,
+        actorEmail: profile.email,
+        action: 'status_changed',
+        metadata: { taskTitle: task.title, newStatus: statusLabel },
+      })
+    }
   }
 
   // Filtered projects
@@ -1115,14 +1349,22 @@ export function Projects() {
 
   // ── Board view ─────────────────────────────────────────────────────────────
 
+  // Sprint-filtered tasks
+  const sprintFilteredTasks = useMemo(() => {
+    if (selectedSprintId === 'all') return tasks
+    if (selectedSprintId === '__none__') return tasks.filter(t => !(t as Task & { sprintId?: string }).sprintId)
+    return tasks.filter(t => (t as Task & { sprintId?: string }).sprintId === selectedSprintId)
+  }, [tasks, selectedSprintId])
+
   if (selectedProject) {
     const client = clients.find(c => c.id === selectedProject.clientId)
+    const activeSprint = sprints.find(s => s.status === 'active')
     return (
       <div className="flex flex-col h-full">
         {/* Board header */}
-        <div className="flex items-center gap-2 px-6 py-[13px] border-b border-border-subtle shrink-0">
+        <div className="flex items-center gap-2 px-6 py-[13px] border-b border-border-subtle shrink-0 flex-wrap">
           <button
-            onClick={() => { setSelectedProject(null); setTasks([]) }}
+            onClick={() => { setSelectedProject(null); setTasks([]); setSprints([]) }}
             className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors text-sm"
           >
             <ChevronLeft size={14} />
@@ -1136,16 +1378,29 @@ export function Projects() {
             <span className="text-sm font-semibold text-text-primary">{selectedProject.name}</span>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            {/* Sprint selector */}
+            {sprints.length > 0 && (
+              <select
+                value={selectedSprintId}
+                onChange={e => setSelectedSprintId(e.target.value)}
+                className="text-xs px-2 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-text-secondary hover:border-zinc-600 transition-colors focus:outline-none"
+              >
+                <option value="all">Alle sprints</option>
+                {sprints.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} {s.status === 'active' ? '(actief)' : ''}</option>
+                ))}
+                <option value="__none__">Geen sprint</option>
+              </select>
+            )}
+
             {/* View toggle */}
             <div className="flex items-center bg-surface-0 border border-border-subtle rounded-lg p-0.5">
               <button
                 onClick={() => setBoardView('kanban')}
                 className={clsx(
                   'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
-                  boardView === 'kanban'
-                    ? 'bg-white/[0.08] text-text-primary'
-                    : 'text-text-muted hover:text-text-secondary'
+                  boardView === 'kanban' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
                 )}
               >
                 <LayoutGrid size={13} />
@@ -1155,13 +1410,21 @@ export function Projects() {
                 onClick={() => setBoardView('list')}
                 className={clsx(
                   'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
-                  boardView === 'list'
-                    ? 'bg-white/[0.08] text-text-primary'
-                    : 'text-text-muted hover:text-text-secondary'
+                  boardView === 'list' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
                 )}
               >
                 <List size={13} />
                 Lijst
+              </button>
+              <button
+                onClick={() => { setBoardView('activity'); loadActivity(selectedProject.id) }}
+                className={clsx(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
+                  boardView === 'activity' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                )}
+              >
+                <Activity size={13} />
+                Activiteit
               </button>
             </div>
 
@@ -1171,33 +1434,68 @@ export function Projects() {
             >
               Bewerken
             </button>
-            <button
-              onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
-            >
-              <Plus size={13} />
-              Taak
-            </button>
+            {boardView !== 'activity' && (
+              <button
+                onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                <Plus size={13} />
+                Taak
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Board / List */}
+        {/* Sprint info bar */}
+        {activeSprint && selectedSprintId === 'all' && (
+          <div className="px-6 py-2 border-b border-border-subtle bg-blue-500/[0.04] flex items-center gap-2 shrink-0">
+            <Zap size={12} className="text-blue-400" />
+            <span className="text-xs text-blue-400 font-medium">{activeSprint.name} loopt</span>
+            {activeSprint.endDate && (
+              <span className="text-xs text-text-muted">
+                t/m {format(new Date(activeSprint.endDate + 'T00:00:00'), 'd MMM', { locale: nl })}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Board / List / Activity */}
         <div className={clsx('flex-1 px-6 pt-5', boardView === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
           {boardView === 'kanban' ? (
             <KanbanBoard
-              tasks={tasks}
+              tasks={sprintFilteredTasks}
               profiles={profiles}
               onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
               onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
               onStatusChange={handleStatusChange}
             />
-          ) : (
+          ) : boardView === 'list' ? (
             <ListView
-              tasks={tasks}
+              tasks={sprintFilteredTasks}
               profiles={profiles}
               onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
               onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
             />
+          ) : (
+            /* Activity feed */
+            <div className="max-w-xl pb-8">
+              {activityLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-4 h-4 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : activities.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Activity size={24} className="text-text-muted mb-3" />
+                  <p className="text-sm text-text-secondary">Nog geen activiteit in dit project</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {activities.map((act) => (
+                    <ActivityRow key={act.id} activity={act} />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -1217,8 +1515,31 @@ export function Projects() {
             defaultStatus={taskDefaultStatus}
             profiles={profiles}
             onClose={() => { setShowTaskModal(false); setEditTask(undefined) }}
-            onSaved={handleTaskSaved}
-            onDeleted={handleTaskDeleted}
+            onSaved={(t) => {
+              handleTaskSaved(t)
+              // Log activity
+              if (profile?.email) {
+                projectsDb.logActivity({
+                  projectId: selectedProject.id,
+                  taskId: t.id,
+                  actorEmail: profile.email,
+                  action: editTask ? 'status_changed' : 'task_created',
+                  metadata: { taskTitle: t.title },
+                })
+              }
+            }}
+            onDeleted={(id) => {
+              handleTaskDeleted(id)
+              if (profile?.email) {
+                projectsDb.logActivity({
+                  projectId: selectedProject.id,
+                  taskId: id,
+                  actorEmail: profile.email,
+                  action: 'task_deleted',
+                  metadata: {},
+                })
+              }
+            }}
           />
         )}
       </div>
@@ -1297,6 +1618,7 @@ export function Projects() {
                   projects={projects}
                   clients={clients}
                   profiles={profiles}
+                  currentUserId={profile?.id}
                   onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
                 />
               )}

@@ -10,8 +10,13 @@ import {
   Kanban,
   Zap,
   UserPlus,
+  CheckSquare,
+  Bell,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
+import { useUIStore } from "../store/useUIStore";
+import { useTodosData } from "../hooks/useTodosData";
+import { useNotifications } from "../hooks/useNotifications";
 import type { AppPage } from "../types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -58,6 +63,10 @@ function NavItem({ to, label, icon: Icon, exact }: { to: string; label: string; 
 export function Sidebar() {
   const profile = useAuthStore((s) => s.profile);
   const signOut = useAuthStore((s) => s.signOut);
+  const toggleTodo = useUIStore((s) => s.toggleTodo);
+  const toggleInbox = useUIStore((s) => s.toggleInbox);
+  const { openCount } = useTodosData();
+  const { unreadCount } = useNotifications();
 
   const isAdmin = profile?.role === "admin";
   const nav = ALL_NAV.filter(
@@ -94,9 +103,53 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom: settings + user */}
+      {/* Bottom: todo + inbox + settings + user */}
       <Separator className="bg-border-subtle" />
       <div className="px-2 py-2 space-y-px">
+        {/* Todo + Inbox action row */}
+        <div className="flex items-center gap-1 px-2.5 py-[5px]">
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={toggleTodo}
+                  className="relative flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors flex-1"
+                >
+                  <CheckSquare size={14} strokeWidth={1.8} className="opacity-70 shrink-0" />
+                  <span className="leading-none">Taken</span>
+                  {openCount > 0 && (
+                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-accent-blue/20 text-accent-blue leading-none">
+                      {openCount}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Taken (T)</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={toggleInbox}
+                  className="relative p-1 text-text-muted hover:text-text-secondary transition-colors rounded"
+                >
+                  <Bell size={14} strokeWidth={1.8} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right"><p>Inbox</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
         {isAdmin && (
           <NavItem to="/settings" label="Instellingen" icon={Settings} exact={false} />
         )}

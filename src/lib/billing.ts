@@ -84,10 +84,21 @@ export function getPastInvoiceDates(client: Client): Date[] {
 }
 
 export function enrichClient(client: Omit<Client, 'nextInvoiceDate' | 'lastInvoiceDate'>): Client {
-  const next = calcNextInvoiceDate(client as Client)
-  const last = calcLastInvoiceDate(client as Client)
+  const c = { ...client } as Client
+  const ct = c.clientType ?? 'recurring'
+  if (ct !== 'recurring') {
+    return {
+      ...c,
+      clientType: ct,
+      nextInvoiceDate: undefined,
+      lastInvoiceDate: undefined,
+    }
+  }
+  const next = calcNextInvoiceDate(c)
+  const last = calcLastInvoiceDate(c)
   return {
-    ...(client as Client),
+    ...c,
+    clientType: 'recurring',
     nextInvoiceDate: format(next, 'yyyy-MM-dd'),
     lastInvoiceDate: last ? format(last, 'yyyy-MM-dd') : undefined,
   }

@@ -7,14 +7,16 @@ import { nl } from 'date-fns/locale'
 import { PageHeader } from '../components/PageHeader'
 import { LeadForm } from '../components/LeadForm'
 import { ClientForm } from '../components/ClientForm'
+import { MentionTextarea, parseMentions } from '../components/MentionTextarea'
 import { useLeadsData, useContactMoments } from '../hooks/useLeadsData'
 import { useAuthStore } from '../store/useAuthStore'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { LEAD_STATUS_CONFIG } from './Leads'
+import { notificationsDb } from '../lib/notificationsDb'
+import { projectsDb } from '../lib/projectsDb'
 import type { Lead, LeadStatus, ContactMomentType, Client } from '../types'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -136,6 +138,28 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
         actorEmail: profile?.email,
       })
       toast.success('Contactmoment toegevoegd')
+
+      // Process @mentions
+      if (profile?.email) {
+        try {
+          const allProfiles = await projectsDb.fetchProfilesBasic()
+          const emails = parseMentions(note.trim(), allProfiles)
+          for (const email of emails) {
+            const target = allProfiles.find(p => p.email === email)
+            if (!target || target.email === profile.email) continue
+            await notificationsDb.create({
+              userId: target.id,
+              actorEmail: profile.email,
+              type: 'mention',
+              content: `${profile.name ?? profile.email} noemde jou in een contactmoment`,
+              linkedType: 'contact_moment',
+              linkedId: leadId,
+              contextUrl: `/leads/${leadId}`,
+            })
+          }
+        } catch { /* non-critical */ }
+      }
+
       setNote('')
       setOpen(false)
       onAdded(date)
@@ -185,12 +209,12 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Notitie</Label>
-            <Textarea
+            <MentionTextarea
               value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Beschrijf het contactmoment..."
+              onChange={setNote}
+              placeholder="Beschrijf het contactmoment... gebruik @ om iemand te taggen"
               rows={3}
-              required
+              className="px-3 py-2 border border-input rounded-md bg-background text-sm focus:border-ring transition-colors"
             />
           </div>
           <div className="flex gap-2 justify-end">
@@ -286,7 +310,7 @@ export function LeadDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { leads, loading, updateLead, updateLeadStatus, deleteLead } = useLeadsData()
-  const { addClient } = useStore()
+  const { addClient, addClientInvoice } = useStore()
 
   const [showEditForm, setShowEditForm] = useState(false)
   const [showClientForm, setShowClientForm] = useState(false)
@@ -353,6 +377,7 @@ export function LeadDetail() {
   return (
     <div>
       <PageHeader
+        title={lead.companyName}
         breadcrumbs={[
           { label: 'Leads', href: '/leads' },
           { label: lead.companyName },
@@ -413,12 +438,12 @@ export function LeadDetail() {
                 <span className="text-xs font-semibold text-text-secondary">Notities</span>
                 {notesSaving && <span className="text-xs text-text-muted">Opslaan...</span>}
               </div>
-              <Textarea
+              <MentionTextarea
                 value={notesValue}
-                onChange={(e) => handleNotesChange(e.target.value)}
-                placeholder="Aantekeningen over deze lead..."
+                onChange={handleNotesChange}
+                placeholder="Aantekeningen over deze lead... gebruik @ om iemand te taggen"
                 rows={5}
-                className="text-sm resize-none bg-transparent border-none px-0 py-0 focus-visible:ring-0 placeholder:text-text-muted"
+                className="text-sm"
               />
             </div>
 
@@ -471,7 +496,13 @@ export function LeadDetail() {
         open={showClientForm}
         onClose={() => setShowClientForm(false)}
         onSave={async (data) => {
-          await addClient(data)
+          const { pendingInvoices, ...rest } = data
+          const created = await addClient(rest)
+          if (pendingInvoices?.length) {
+            for (const p of pendingInvoices) {
+              await addClientInvoice({ ...p, clientId: created.id })
+            }
+          }
           await updateLeadStatus(lead.id, 'won')
           toast.success(`${lead.companyName} toegevoegd als klant`)
           setShowClientForm(false)

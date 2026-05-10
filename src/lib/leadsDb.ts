@@ -85,20 +85,24 @@ function momentFromRow(row: DbContactMoment): ContactMoment {
 
 export const leadsDb = {
   async fetchAll(): Promise<Lead[]> {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data, error } = await withTimeout(
+      supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+    )
     if (error) throw error
     return (data as DbLead[]).map(leadFromRow)
   },
 
   async fetchOne(id: string): Promise<Lead | null> {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle()
+    const { data, error } = await withTimeout(
+      supabase
+        .from('leads')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+    )
     if (error) throw error
     return data ? leadFromRow(data as DbLead) : null
   },
@@ -118,11 +122,13 @@ export const leadsDb = {
   },
 
   async fetchContactMoments(leadId: string): Promise<ContactMoment[]> {
-    const { data, error } = await supabase
-      .from('contact_moments')
-      .select('*')
-      .eq('lead_id', leadId)
-      .order('date', { ascending: false })
+    const { data, error } = await withTimeout(
+      supabase
+        .from('contact_moments')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('date', { ascending: false })
+    )
     if (error) throw error
     return (data as DbContactMoment[]).map(momentFromRow)
   },

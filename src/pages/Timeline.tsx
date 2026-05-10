@@ -14,10 +14,11 @@ import { nl } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceTimeline, getInvoiceStatus, formatWeek } from '../lib/billing'
+import { invoicesForClient } from '../lib/clientStats'
 import { PageHeader } from '../components/PageHeader'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { Client } from '../types'
+import type { Client, ClientInvoice } from '../types'
 import { cn } from '@/lib/utils'
 
 const COL_WIDTH = 44 // pixels per week column
@@ -44,9 +45,19 @@ function useTimeline(viewMode: ViewMode) {
   return { start, end, weeks, today }
 }
 
-function statusBarColor(client: Client, today: Date): string {
+function statusBarColor(client: Client, today: Date, milestones: ClientInvoice[]): string {
   if (client.status === 'paused') return 'bg-zinc-600/30 border-zinc-600/40'
   if (client.status === 'inactive') return 'bg-zinc-800/50 border-zinc-700/40'
+  const ct = client.clientType ?? 'recurring'
+  if (ct !== 'recurring') {
+    const unpaid = milestones.filter((m) => m.status !== 'paid')
+    if (unpaid.length === 0) return 'bg-green-500/20 border-green-500/30'
+    const next = unpaid.map((m) => parseISO(m.dueDate)).sort((a, b) => a.getTime() - b.getTime())[0]
+    const s = getInvoiceStatus(next)
+    if (s === 'overdue') return 'bg-red-500/20 border-red-500/30'
+    if (s === 'this_week') return 'bg-orange-500/20 border-orange-500/30'
+    return 'bg-green-500/20 border-green-500/30'
+  }
   if (!client.nextInvoiceDate) return 'bg-green-500/20 border-green-500/30'
   const next = parseISO(client.nextInvoiceDate)
   const s = getInvoiceStatus(next)
@@ -63,11 +74,13 @@ interface TooltipData {
   invoiceDate?: Date
   isPast?: boolean
   invoiced?: boolean
+  milestoneAmount?: number
 }
 
 export function Timeline() {
   usePageMeta('Timeline → Flits Impact', 'Tijdlijn van alle klantactiviteiten en mijlpalen.')
   const clients = useStore((s) => s.clients)
+  const clientInvoices = useStore((s) => s.clientInvoices)
   const toggleInvoiced = useStore((s) => s.toggleInvoiced)
   const navigate = useNavigate()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -119,14 +132,14 @@ export function Timeline() {
         actions={
           <>
             <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as 'all' | 'active' | 'paused')}>
-              <TabsList className="h-7">
+              <TabsList className="h-7 p-0.5">
                 <TabsTrigger value="all" className="text-xs h-6 px-2.5">Alle</TabsTrigger>
                 <TabsTrigger value="active" className="text-xs h-6 px-2.5">Actief</TabsTrigger>
                 <TabsTrigger value="paused" className="text-xs h-6 px-2.5">Gepauzeerd</TabsTrigger>
               </TabsList>
             </Tabs>
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList className="h-7">
+              <TabsList className="h-7 p-0.5">
                 <TabsTrigger value="weeks" className="text-xs h-6 px-2.5">26 weken</TabsTrigger>
                 <TabsTrigger value="months" className="text-xs h-6 px-2.5">52 weken</TabsTrigger>
               </TabsList>
@@ -224,15 +237,18 @@ export function Timeline() {
             {filteredClients.map((client, idx) => {
               const contractStart = parseISO(client.startDate)
               const contractEnd = client.endDate ? parseISO(client.endDate) : addWeeks(today, 52)
-              const invoiceDates = getInvoiceTimeline(client, 52)
-
-              // Bar start/end in columns
               const barStartDay = differenceInDays(contractStart < start ? start : contractStart, start)
               const barEndDay = differenceInDays(contractEnd > end ? end : contractEnd, start)
               const barX = (barStartDay / 7) * COL_WIDTH
               const barW = Math.max(((barEndDay - barStartDay) / 7) * COL_WIDTH, COL_WIDTH / 2)
 
-              const barColorClass = statusBarColor(client, today)
+              const milestones = invoicesForClient(clientInvoices, client.id)
+              const invoiceDates =
+                (client.clientType ?? 'recurring') === 'recurring'
+                  ? getInvoiceTimeline(client, 52)
+                  : milestones.map((m) => parseISO(m.dueDate))
+
+              const barColorClass = statusBarColor(client, today, milestones)
 
               return (
                 <div
@@ -256,7 +272,13 @@ export function Timeline() {
                         {client.companyName}
                       </p>
                       <p className="text-xs text-text-muted truncate">
-                        €{client.pricePerCycle.toLocaleString('nl-NL')}
+                        {(client.clientType ?? 'recurring') === 'recurring'
+                          ? `€${client.pricePerCycle.toLocaleString('nl-NL')}`
+                          : client.clientType === 'project'
+                            ? `€${(client.projectBudget ?? 0).toLocaleString('nl-NL')} project`
+                            : milestones[0]
+                              ? `€${milestones[0].amount.toLocaleString('nl-NL')}`
+                              : '—'}
                       </p>
                     </div>
                   </div>
@@ -299,9 +321,15 @@ export function Timeline() {
                       const x = (dayOffset / 7) * COL_WIDTH
                       const isPast = date < today
                       const dateKey = format(date, 'yyyy-MM-dd')
-                      const invoiced = isPast
-                        ? (client.invoiceRecords?.find((r) => r.date === dateKey)?.invoiced ?? false)
-                        : false
+                      const ms = milestones.find((m) => m.dueDate === dateKey)
+                      const invoiced =
+                        (client.clientType ?? 'recurring') === 'recurring'
+                          ? isPast
+                            ? (client.invoiceRecords?.find((r) => r.date === dateKey)?.invoiced ?? false)
+                            : false
+                          : isPast
+                            ? ms?.status === 'paid'
+                            : false
 
                       let dotColor: string
                       if (isPast) {
@@ -325,13 +353,26 @@ export function Timeline() {
                             isPast ? 'w-2.5 h-2.5 cursor-pointer' : 'w-2 h-2 cursor-default'
                           }`}
                           style={{ left: x - (isPast ? 5 : 4) }}
-                          onClick={isPast ? (e) => {
-                            e.stopPropagation()
-                            toggleInvoiced(client.id, dateKey)
-                          } : undefined}
+                          onClick={
+                            isPast && (client.clientType ?? 'recurring') === 'recurring'
+                              ? (e) => {
+                                  e.stopPropagation()
+                                  toggleInvoiced(client.id, dateKey)
+                                }
+                              : undefined
+                          }
                           onMouseEnter={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect()
-                            setTooltip({ client, x: rect.left, y: rect.top, type: 'invoice', invoiceDate: date, isPast, invoiced })
+                            setTooltip({
+                              client,
+                              x: rect.left,
+                              y: rect.top,
+                              type: 'invoice',
+                              invoiceDate: date,
+                              isPast,
+                              invoiced,
+                              milestoneAmount: ms?.amount,
+                            })
                           }}
                           onMouseLeave={() => setTooltip(null)}
                         />
@@ -356,13 +397,17 @@ export function Timeline() {
             <>
               <p className="text-text-primary font-medium">{formatWeek(tooltip.invoiceDate)}</p>
               <p className="text-text-muted">{format(tooltip.invoiceDate, 'd MMMM yyyy', { locale: nl })}</p>
-              <p className="text-text-muted mt-1">€{tooltip.client.pricePerCycle.toLocaleString('nl-NL')}</p>
+              <p className="text-text-muted mt-1">
+                €
+                {(tooltip.milestoneAmount ?? tooltip.client.pricePerCycle).toLocaleString('nl-NL')}
+                {(tooltip.client.clientType ?? 'recurring') === 'recurring' ? ' / cyclus' : ''}
+              </p>
               {tooltip.isPast && (
                 <div className={`mt-1.5 flex items-center gap-1 font-medium ${tooltip.invoiced ? 'text-green-400' : 'text-red-400'}`}>
                   <span>{tooltip.invoiced ? '✓ Gefactureerd' : '✗ Niet gefactureerd'}</span>
                 </div>
               )}
-              {tooltip.isPast && (
+              {tooltip.isPast && (tooltip.client.clientType ?? 'recurring') === 'recurring' && (
                 <p className="text-text-muted mt-1 opacity-60">Klik om te wijzigen</p>
               )}
             </>
@@ -379,7 +424,13 @@ export function Timeline() {
                 </p>
               )}
               <p className="font-medium text-text-primary mt-1">
-                €{tooltip.client.pricePerCycle.toLocaleString('nl-NL')} / cyclus
+                {(tooltip.client.clientType ?? 'recurring') === 'recurring' ? (
+                  <>€{tooltip.client.pricePerCycle.toLocaleString('nl-NL')} / cyclus</>
+                ) : tooltip.client.clientType === 'project' ? (
+                  <>Budget €{(tooltip.client.projectBudget ?? 0).toLocaleString('nl-NL')}</>
+                ) : (
+                  <>Eenmalig / projectfacturen</>
+                )}
               </p>
             </>
           )}

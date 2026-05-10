@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import type { Client, InvoiceRecord, Post, PostLog } from '../types'
+import type { Client, ClientInvoice, InvoiceRecord, Post, PostLog } from '../types'
 import { enrichClient } from '../lib/billing'
-import { db, postDb, postLogDb } from '../lib/db'
+import { db, postDb, postLogDb, clientInvoiceDb } from '../lib/db'
 import { useAuthStore } from './useAuthStore'
 
 function generateId(): string {
@@ -24,14 +24,18 @@ type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt'>
 interface StoreState {
   clients: Client[]
   posts: Post[]
+  clientInvoices: ClientInvoice[]
   initialized: boolean
   error: string | null
   fetchClients: () => Promise<void>
-  addClient: (data: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'nextInvoiceDate' | 'lastInvoiceDate'>) => Promise<void>
+  addClient: (data: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'nextInvoiceDate' | 'lastInvoiceDate'>) => Promise<Client>
   updateClient: (id: string, data: Partial<Client>) => Promise<void>
   deleteClient: (id: string) => Promise<void>
   getClient: (id: string) => Client | undefined
   toggleInvoiced: (clientId: string, date: string) => Promise<void>
+  addClientInvoice: (data: Omit<ClientInvoice, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ClientInvoice>
+  updateClientInvoice: (id: string, data: Partial<ClientInvoice>) => Promise<void>
+  deleteClientInvoice: (id: string) => Promise<void>
   addPost: (data: PostInput) => Promise<Post>
   addPostsBulk: (posts: PostInput[]) => Promise<Post[]>
   updatePost: (id: string, data: Partial<Post>) => Promise<void>
@@ -41,6 +45,7 @@ interface StoreState {
 export const useStore = create<StoreState>()((set, get) => ({
   clients: [],
   posts: [],
+  clientInvoices: [],
   initialized: false,
   error: null,
 
@@ -52,29 +57,51 @@ export const useStore = create<StoreState>()((set, get) => ({
       if (clients.length === 0) {
         const local = loadFromLocalStorage()
         if (local && local.length > 0) {
-          const enriched = local.map((c) => enrichClient(c))
+          const enriched = local.map((c) =>
+            enrichClient({
+              ...(c as Client),
+              clientType: (c as Client).clientType ?? 'recurring',
+              billingCycle: (c as Client).billingCycle ?? '6_weeks',
+              pricePerCycle:
+                typeof (c as Client).pricePerCycle === 'number'
+                  ? (c as Client).pricePerCycle
+                  : 0,
+            } as Client),
+          )
           await db.upsertMany(enriched)
           clients = await db.fetchAll()
           localStorage.removeItem('agency-crm-v1')
         }
       }
 
-      const posts = await postDb.fetchAll()
-      set({ clients, posts, initialized: true, error: null })
+      const [posts, clientInvoices] = await Promise.all([
+        postDb.fetchAll(),
+        clientInvoiceDb.fetchAll().catch(() => [] as ClientInvoice[]),
+      ])
+      set({ clients, posts, clientInvoices, initialized: true, error: null })
     } catch (e) {
       set({ initialized: true, error: e instanceof Error ? e.message : String(e) })
     }
   },
 
   addClient: async (data) => {
+    const now = new Date().toISOString()
     const client = enrichClient({
       ...data,
+      clientType: data.clientType ?? 'recurring',
+      billingCycle: data.billingCycle ?? '6_weeks',
+      pricePerCycle: typeof data.pricePerCycle === 'number' ? data.pricePerCycle : 0,
       id: generateId(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     } as Client)
-    set((s) => ({ clients: [...s.clients, client].sort((a, b) => a.companyName.localeCompare(b.companyName)) }))
+    set((s) => ({
+      clients: [...s.clients, client].sort((a, b) =>
+        a.companyName.localeCompare(b.companyName),
+      ),
+    }))
     await db.upsert(client)
+    return client
   },
 
   updateClient: async (id, data) => {
@@ -89,7 +116,10 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   deleteClient: async (id) => {
-    set((s) => ({ clients: s.clients.filter((c) => c.id !== id) }))
+    set((s) => ({
+      clients: s.clients.filter((c) => c.id !== id),
+      clientInvoices: s.clientInvoices.filter((i) => i.clientId !== id),
+    }))
     await db.delete(id)
   },
 
@@ -214,6 +244,8 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   toggleInvoiced: async (clientId, date) => {
+    const client = get().clients.find((c) => c.id === clientId)
+    if (!client || (client.clientType ?? 'recurring') !== 'recurring') return
     set((s) => ({
       clients: s.clients.map((c) => {
         if (c.id !== clientId) return c
@@ -234,5 +266,37 @@ export const useStore = create<StoreState>()((set, get) => ({
     }))
     const updated = get().clients.find((c) => c.id === clientId)
     if (updated) await db.upsert(updated)
+  },
+
+  addClientInvoice: async (data) => {
+    const now = new Date().toISOString()
+    const inv: ClientInvoice = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }
+    set((s) => ({
+      clientInvoices: [...s.clientInvoices, inv].sort((a, b) =>
+        a.dueDate.localeCompare(b.dueDate),
+      ),
+    }))
+    await clientInvoiceDb.upsert(inv)
+    return inv
+  },
+
+  updateClientInvoice: async (id, data) => {
+    set((s) => ({
+      clientInvoices: s.clientInvoices.map((i) =>
+        i.id === id ? { ...i, ...data, updatedAt: new Date().toISOString() } : i,
+      ),
+    }))
+    const updated = get().clientInvoices.find((i) => i.id === id)
+    if (updated) await clientInvoiceDb.upsert(updated)
+  },
+
+  deleteClientInvoice: async (id) => {
+    set((s) => ({ clientInvoices: s.clientInvoices.filter((i) => i.id !== id) }))
+    await clientInvoiceDb.delete(id)
   },
 }))

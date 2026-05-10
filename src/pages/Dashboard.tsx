@@ -117,8 +117,10 @@ export function Dashboard() {
     const expiringContracts: typeof clients = []
 
     active.forEach((c) => {
-      effectiveMrr += calcMonthlyRevenue(c.pricePerCycle, c.billingCycle, c.customCycleDays)
-      if (c.nextInvoiceDate) {
+      if ((c.clientType ?? 'recurring') === 'recurring') {
+        effectiveMrr += calcMonthlyRevenue(c.pricePerCycle, c.billingCycle, c.customCycleDays)
+      }
+      if (c.nextInvoiceDate && (c.clientType ?? 'recurring') === 'recurring') {
         const next = parseISO(c.nextInvoiceDate)
         const diff = differenceInDays(next, today)
         const status = getInvoiceStatus(next)
@@ -580,7 +582,12 @@ export function Dashboard() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-3">
                           <span className="text-xs font-semibold text-text-primary tabular-nums">
-                            €{c.pricePerCycle.toLocaleString('nl-NL')}
+                            €
+                        {(c.clientType ?? 'recurring') === 'recurring'
+                          ? c.pricePerCycle.toLocaleString('nl-NL')
+                          : c.clientType === 'project'
+                            ? (c.projectBudget ?? 0).toLocaleString('nl-NL')
+                            : '—'}
                           </span>
                           <InvoiceBadge status={status} />
                         </div>

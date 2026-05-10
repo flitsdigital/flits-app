@@ -17,8 +17,11 @@ import { TravelExpenses } from './pages/TravelExpenses'
 import { Projects } from './pages/Projects'
 import { Leads } from './pages/Leads'
 import { LeadDetail } from './pages/LeadDetail'
+import { TodoSheet } from './components/TodoSheet'
+import { InboxSheet } from './components/InboxSheet'
 import { useAuthStore } from './store/useAuthStore'
 import { useStore } from './store/useStore'
+import { useUIStore } from './store/useUIStore'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -32,6 +35,18 @@ export default function App() {
   useEffect(() => {
     if (session) fetchClients()
   }, [session])
+
+  // Global T shortcut to toggle todo panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as Element).tagName
+      if (e.key === 't' && !['INPUT', 'TEXTAREA'].includes(tag) && !e.metaKey && !e.ctrlKey) {
+        useUIStore.getState().toggleTodo()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   return (
     <BrowserRouter>
@@ -84,6 +99,11 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      {/* Global panels — rendered outside Layout so they're always available */}
+      <TodoSheet />
+      <InboxSheet />
+
       <Toaster position="bottom-right" richColors />
     </BrowserRouter>
   )

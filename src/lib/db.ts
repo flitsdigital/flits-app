@@ -1,5 +1,15 @@
 import { supabase, withTimeout } from './supabase'
-import type { Client, InvoiceRecord, Post, PostType, PostStatus, PostLog, PostLogAction } from '../types'
+import type {
+  Client,
+  ClientInvoice,
+  ClientInvoiceStatus,
+  InvoiceRecord,
+  Post,
+  PostType,
+  PostStatus,
+  PostLog,
+  PostLogAction,
+} from '../types'
 import { enrichClient } from './billing'
 
 interface DbRow {
@@ -15,15 +25,26 @@ interface DbRow {
   end_date: string | null
   status: string
   package_type: string
-  billing_cycle: string
+  billing_cycle: string | null
   custom_cycle_days: number | null
-  price_per_cycle: number
+  price_per_cycle: number | null
   invoice_records: InvoiceRecord[]
+  client_type?: string | null
+  project_budget?: number | null
+  project_deadline?: string | null
   created_at: string
   updated_at: string
 }
 
+function parseClientType(v: string | null | undefined): Client['clientType'] {
+  if (v === 'project' || v === 'oneoff') return v
+  return 'recurring'
+}
+
 function fromRow(row: DbRow): Client {
+  const clientType = parseClientType(row.client_type)
+  const billingCycle = (row.billing_cycle ?? '6_weeks') as Client['billingCycle']
+  const pricePerCycle = Number(row.price_per_cycle ?? 0)
   return enrichClient({
     id: row.id,
     companyName: row.company_name,
@@ -33,20 +54,24 @@ function fromRow(row: DbRow): Client {
     address: row.address ?? '',
     vatNumber: row.vat_number ?? '',
     notes: row.notes ?? '',
+    clientType,
+    projectBudget: row.project_budget != null ? Number(row.project_budget) : undefined,
+    projectDeadline: row.project_deadline ?? undefined,
     startDate: row.start_date,
     endDate: row.end_date ?? undefined,
     status: row.status as Client['status'],
     packageType: row.package_type ?? '',
-    billingCycle: row.billing_cycle as Client['billingCycle'],
+    billingCycle,
     customCycleDays: row.custom_cycle_days ?? undefined,
-    pricePerCycle: Number(row.price_per_cycle),
+    pricePerCycle,
     invoiceRecords: row.invoice_records ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
 }
 
-function toRow(client: Client): Omit<DbRow, never> {
+function toRow(client: Client): Record<string, unknown> {
+  const isRecurring = client.clientType === 'recurring'
   return {
     id: client.id,
     company_name: client.companyName,
@@ -60,9 +85,12 @@ function toRow(client: Client): Omit<DbRow, never> {
     end_date: client.endDate ?? null,
     status: client.status,
     package_type: client.packageType,
-    billing_cycle: client.billingCycle,
-    custom_cycle_days: client.customCycleDays ?? null,
-    price_per_cycle: client.pricePerCycle,
+    client_type: client.clientType,
+    project_budget: client.projectBudget ?? null,
+    project_deadline: client.projectDeadline ?? null,
+    billing_cycle: isRecurring ? client.billingCycle : null,
+    custom_cycle_days: isRecurring ? (client.customCycleDays ?? null) : null,
+    price_per_cycle: isRecurring ? client.pricePerCycle : null,
     invoice_records: client.invoiceRecords ?? [],
     created_at: client.createdAt,
     updated_at: client.updatedAt,
@@ -81,14 +109,14 @@ export const db = {
 
   async upsert(client: Client): Promise<void> {
     const { error } = await withTimeout(
-      supabase.from('clients').upsert(toRow(client))
+      supabase.from('clients').upsert(toRow(client) as never)
     )
     if (error) throw error
   },
 
   async upsertMany(clients: Client[]): Promise<void> {
     const { error } = await withTimeout(
-      supabase.from('clients').upsert(clients.map(toRow))
+      supabase.from('clients').upsert(clients.map(toRow) as never[])
     )
     if (error) throw error
   },
@@ -96,6 +124,90 @@ export const db = {
   async delete(id: string): Promise<void> {
     const { error } = await withTimeout(
       supabase.from('clients').delete().eq('id', id)
+    )
+    if (error) throw error
+  },
+}
+
+// ── Client invoices (milestones / eenmalig) ───────────────────────────────────
+
+interface DbClientInvoice {
+  id: string
+  client_id: string
+  label: string
+  amount: number
+  percentage: number | null
+  due_date: string
+  status: string
+  invoice_number: string | null
+  sent_at: string | null
+  paid_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+function clientInvoiceFromRow(row: DbClientInvoice): ClientInvoice {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    label: row.label,
+    amount: Number(row.amount),
+    percentage: row.percentage != null ? Number(row.percentage) : undefined,
+    dueDate: row.due_date,
+    status: row.status as ClientInvoiceStatus,
+    invoiceNumber: row.invoice_number ?? undefined,
+    sentAt: row.sent_at ?? undefined,
+    paidAt: row.paid_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function clientInvoiceToRow(inv: ClientInvoice): DbClientInvoice {
+  return {
+    id: inv.id,
+    client_id: inv.clientId,
+    label: inv.label,
+    amount: inv.amount,
+    percentage: inv.percentage ?? null,
+    due_date: inv.dueDate,
+    status: inv.status,
+    invoice_number: inv.invoiceNumber ?? null,
+    sent_at: inv.sentAt ?? null,
+    paid_at: inv.paidAt ?? null,
+    created_at: inv.createdAt,
+    updated_at: inv.updatedAt,
+  }
+}
+
+export const clientInvoiceDb = {
+  async fetchAll(): Promise<ClientInvoice[]> {
+    const { data, error } = await supabase
+      .from('client_invoices')
+      .select('*')
+      .order('due_date', { ascending: true })
+    if (error) throw error
+    return (data as DbClientInvoice[]).map(clientInvoiceFromRow)
+  },
+
+  async upsert(inv: ClientInvoice): Promise<void> {
+    const { error } = await withTimeout(
+      supabase.from('client_invoices').upsert(clientInvoiceToRow(inv) as never)
+    )
+    if (error) throw error
+  },
+
+  async upsertMany(invoices: ClientInvoice[]): Promise<void> {
+    if (invoices.length === 0) return
+    const { error } = await withTimeout(
+      supabase.from('client_invoices').upsert(invoices.map(clientInvoiceToRow) as never[])
+    )
+    if (error) throw error
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await withTimeout(
+      supabase.from('client_invoices').delete().eq('id', id)
     )
     if (error) throw error
   },

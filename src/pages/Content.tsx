@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { usePageMeta } from '../hooks/usePageMeta'
 import {
   startOfMonth,
@@ -28,6 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DatePickerButton } from "@/components/ui/date-picker-button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   ChevronLeft,
@@ -47,6 +49,11 @@ import {
   CalendarRange,
   ChevronsUpDown,
   MoreHorizontal,
+  LayoutGrid,
+  Circle,
+  CircleDot,
+  MessageSquare,
+  CheckCircle2,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { PostForm } from "../components/PostForm";
@@ -58,7 +65,7 @@ import {
   postTypeLabel,
   postStatusLabel,
 } from "../lib/postHelpers";
-import type { Post, PostType } from "../types";
+import type { Post, PostType, PostStatus } from "../types";
 
 const TYPE_ICON: Record<PostType, React.ElementType> = {
   foto: Image,
@@ -69,7 +76,216 @@ const TYPE_ICON: Record<PostType, React.ElementType> = {
 };
 
 const WEEKDAYS = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
-type ViewMode = "month" | "week" | "list";
+type ViewMode = "month" | "week" | "list" | "kanban";
+
+/** DB kan nog `planned` hebben — behandel als todo. */
+function normalizePostStatus(status: string): PostStatus {
+  if (status === "planned") return "todo";
+  return status as PostStatus;
+}
+
+const POST_KANBAN_COLS: {
+  id: PostStatus;
+  label: string;
+  Icon: React.ElementType;
+  bg: string;
+  headerBg: string;
+  ring: string;
+  text: string;
+}[] = [
+  { id: "todo", label: "Te doen", Icon: Circle, bg: "bg-zinc-500/[0.06]", headerBg: "bg-zinc-500/10", ring: "bg-zinc-400", text: "text-zinc-400" },
+  { id: "in_progress", label: "Bezig", Icon: CircleDot, bg: "bg-orange-500/[0.06]", headerBg: "bg-orange-500/10", ring: "bg-orange-400", text: "text-orange-400" },
+  { id: "feedback", label: "Feedback", Icon: MessageSquare, bg: "bg-blue-500/[0.06]", headerBg: "bg-blue-500/10", ring: "bg-blue-400", text: "text-blue-400" },
+  { id: "posted", label: "Gepost", Icon: CheckCircle2, bg: "bg-green-500/[0.05]", headerBg: "bg-green-500/10", ring: "bg-green-400", text: "text-green-400" },
+];
+
+function PostKanbanCard({
+  post,
+  clientName,
+  onClick,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  post: Post;
+  clientName: string;
+  onClick: () => void;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const Icon = TYPE_ICON[post.type];
+  const st = normalizePostStatus(post.status);
+  const sc = postStatusChipColor[st] ?? postStatusChipColor.todo;
+  const bar: Record<PostStatus, string> = {
+    todo: "border-l-zinc-500",
+    in_progress: "border-l-orange-500",
+    feedback: "border-l-blue-500",
+    posted: "border-l-green-500",
+  };
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onClick}
+      className={clsx(
+        "bg-surface-0 border border-border-subtle rounded-lg p-3 cursor-grab active:cursor-grabbing",
+        "hover:border-zinc-500 hover:shadow-lg hover:shadow-black/20 transition-all group select-none border-l-[3px]",
+        bar[st],
+        sc.border,
+        isDragging && "opacity-40 scale-[0.98]",
+      )}
+    >
+      <div className="flex items-start gap-2 mb-1.5">
+        <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 border border-border-subtle bg-surface-2">
+          <Icon size={13} className="text-text-secondary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-text-primary leading-snug group-hover:text-white transition-colors truncate">
+            {clientName}
+          </p>
+          <p className="text-[10px] text-text-muted mt-0.5">{postTypeLabel(post.type)}</p>
+        </div>
+      </div>
+      {post.caption && (
+        <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">{post.caption}</p>
+      )}
+      {post.date && (
+        <p className="text-[10px] text-text-muted mt-1.5">
+          {format(parseISO(post.date), "EEE d MMM", { locale: nl })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ContentKanbanBoard({
+  posts,
+  clientMap,
+  onPostClick,
+  onStatusChange,
+}: {
+  posts: Post[];
+  clientMap: Record<string, string>;
+  onPostClick: (post: Post) => void;
+  onStatusChange: (postId: string, status: PostStatus) => void | Promise<void>;
+}) {
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<PostStatus | null>(null);
+
+  const byStatus = useMemo(() => {
+    const map: Record<PostStatus, Post[]> = { todo: [], in_progress: [], feedback: [], posted: [] };
+    for (const p of posts) {
+      const st = normalizePostStatus(p.status);
+      (map[st] ?? map.todo).push(p);
+    }
+    (Object.keys(map) as PostStatus[]).forEach((k) => {
+      map[k].sort((a, b) => {
+        const da = a.date ?? "";
+        const db = b.date ?? "";
+        if (da !== db) return da.localeCompare(db);
+        return (clientMap[a.clientId] ?? "").localeCompare(clientMap[b.clientId] ?? "");
+      });
+    });
+    return map;
+  }, [posts, clientMap]);
+
+  const handleDragOver = useCallback((e: React.DragEvent, status: PostStatus) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStatus(status);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, status: PostStatus) => {
+      e.preventDefault();
+      if (draggedId) {
+        const post = posts.find((p) => p.id === draggedId);
+        if (post && normalizePostStatus(post.status) !== status) {
+          void onStatusChange(draggedId, status);
+        }
+      }
+      setDraggedId(null);
+      setDragOverStatus(null);
+    },
+    [draggedId, posts, onStatusChange],
+  );
+
+  return (
+    <div className="flex gap-3 h-full min-h-[420px] overflow-x-auto pb-4">
+      {POST_KANBAN_COLS.map(({ id, label, Icon, bg, headerBg, ring, text }) => {
+        const colPosts = byStatus[id];
+        const isOver = dragOverStatus === id;
+        const isDragSource = draggedId !== null && colPosts.some((p) => p.id === draggedId);
+        return (
+          <div
+            key={id}
+            onDragOver={(e) => handleDragOver(e, id)}
+            onDragLeave={() => setDragOverStatus(null)}
+            onDrop={(e) => handleDrop(e, id)}
+            className={clsx(
+              "flex flex-col w-[272px] shrink-0 rounded-xl overflow-hidden border transition-all duration-150",
+              bg,
+              isOver
+                ? "border-accent-blue/60 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]"
+                : isDragSource
+                  ? "border-zinc-700"
+                  : "border-border-subtle",
+            )}
+          >
+            <div className={clsx("flex items-center gap-2 px-3 py-2.5 border-b border-border-subtle", headerBg)}>
+              <div className={clsx("w-2 h-2 rounded-full shrink-0", ring)} />
+              <Icon size={13} className={text} />
+              <span className={clsx("text-xs font-semibold uppercase tracking-wider", text)}>{label}</span>
+              <span
+                className={clsx(
+                  "ml-auto text-xs font-medium px-1.5 py-0.5 rounded-full",
+                  colPosts.length > 0 ? `${text} bg-white/[0.08]` : "text-text-muted",
+                )}
+              >
+                {colPosts.length}
+              </span>
+            </div>
+
+            <div
+              className={clsx(
+                "flex-1 overflow-y-auto p-2 space-y-2 transition-colors duration-150 min-h-[120px]",
+                isOver && colPosts.length === 0 && "bg-accent-blue/[0.06]",
+              )}
+            >
+              {colPosts.map((post) => (
+                <PostKanbanCard
+                  key={post.id}
+                  post={post}
+                  clientName={clientMap[post.clientId] ?? "?"}
+                  onClick={() => {
+                    if (!draggedId) onPostClick(post);
+                  }}
+                  isDragging={draggedId === post.id}
+                  onDragStart={() => setDraggedId(post.id)}
+                  onDragEnd={() => {
+                    setDraggedId(null);
+                    setDragOverStatus(null);
+                  }}
+                />
+              ))}
+
+              {isOver && draggedId && !colPosts.some((p) => p.id === draggedId) && (
+                <div className="border-2 border-dashed border-accent-blue/40 rounded-lg h-16 flex items-center justify-center">
+                  <span className="text-xs text-accent-blue/60">Hier neerzetten</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Content Plan Modal ────────────────────────────────────────────────────────
 
@@ -422,6 +638,8 @@ export function Content() {
   const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
+  const [weekTodosOnly, setWeekTodosOnly] = useState(false);
+
   const clientMap = useMemo(() => {
     const map: Record<string, string> = {};
     clients.forEach((c) => {
@@ -438,35 +656,7 @@ export function Content() {
     [posts, filterClientId],
   );
 
-  function postsForDay(day: Date): Post[] {
-    return filteredPosts
-      .filter((p) => p.date && isSameDay(parseISO(p.date), day))
-      .sort((a, b) => (a.clientId ?? "").localeCompare(b.clientId ?? ""));
-  }
-
-  // ── Month helpers ────────────────────────────────────────────────────────
-  const calendarDays = useMemo(() => {
-    const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
-    const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
-    return eachDayOfInterval({ start, end });
-  }, [currentDate]);
-
-  const monthStats = useMemo(() => {
-    const mp = filteredPosts.filter((p) => {
-      if (!p.date) return false;
-      const d = parseISO(p.date);
-      return isSameMonth(d, currentDate);
-    });
-    return {
-      total: mp.length,
-      posted: mp.filter((p) => p.status === "posted").length,
-      feedback: mp.filter((p) => p.status === "feedback").length,
-      in_progress: mp.filter((p) => p.status === "in_progress").length,
-      todo: mp.filter((p) => p.status === "todo").length,
-    };
-  }, [filteredPosts, currentDate]);
-
-  // ── Week helpers ─────────────────────────────────────────────────────────
+  // ── Week helpers (needed before postsForCalendar) ─────────────────────────
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     const end = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -482,20 +672,69 @@ export function Content() {
     return `${format(start, "d MMM", { locale: nl })} – ${format(end, "d MMM yyyy", { locale: nl })}`;
   }, [weekDays]);
 
+  /** Kalender + week-view: optioneel alleen todo’s in de rondom `currentDate` geselecteerde week. */
+  const postsForCalendar = useMemo(() => {
+    if (!weekTodosOnly) return filteredPosts;
+    return filteredPosts.filter((p) => {
+      if (!p.date) return false;
+      const d = parseISO(p.date);
+      if (!weekDays.some((day) => isSameDay(d, day))) return false;
+      return p.status === "todo" || (p.status as string) === "planned";
+    });
+  }, [filteredPosts, weekTodosOnly, weekDays]);
+
+  /** Kanban: posts in dezelfde week; bij weekTodosOnly gelijk aan postsForCalendar. */
+  const kanbanPosts = useMemo(() => {
+    if (weekTodosOnly) return postsForCalendar;
+    return filteredPosts.filter((p) => {
+      if (!p.date) return false;
+      const d = parseISO(p.date);
+      return weekDays.some((day) => isSameDay(d, day));
+    });
+  }, [weekTodosOnly, postsForCalendar, filteredPosts, weekDays]);
+
+  function postsForDay(day: Date): Post[] {
+    return postsForCalendar
+      .filter((p) => p.date && isSameDay(parseISO(p.date), day))
+      .sort((a, b) => (a.clientId ?? "").localeCompare(b.clientId ?? ""));
+  }
+
+  // ── Month helpers ────────────────────────────────────────────────────────
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+    const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
+    return eachDayOfInterval({ start, end });
+  }, [currentDate]);
+
+  const monthStats = useMemo(() => {
+    const mp = postsForCalendar.filter((p) => {
+      if (!p.date) return false;
+      const d = parseISO(p.date);
+      return isSameMonth(d, currentDate);
+    });
+    return {
+      total: mp.length,
+      posted: mp.filter((p) => normalizePostStatus(p.status) === "posted").length,
+      feedback: mp.filter((p) => normalizePostStatus(p.status) === "feedback").length,
+      in_progress: mp.filter((p) => normalizePostStatus(p.status) === "in_progress").length,
+      todo: mp.filter((p) => normalizePostStatus(p.status) === "todo").length,
+    };
+  }, [postsForCalendar, currentDate]);
+
   const weekStats = useMemo(() => {
-    const wp = filteredPosts.filter((p) => {
+    const wp = postsForCalendar.filter((p) => {
       if (!p.date) return false;
       const d = parseISO(p.date);
       return weekDays.some((day) => isSameDay(d, day));
     });
     return {
       total: wp.length,
-      posted: wp.filter((p) => p.status === "posted").length,
-      feedback: wp.filter((p) => p.status === "feedback").length,
-      in_progress: wp.filter((p) => p.status === "in_progress").length,
-      todo: wp.filter((p) => p.status === "todo").length,
+      posted: wp.filter((p) => normalizePostStatus(p.status) === "posted").length,
+      feedback: wp.filter((p) => normalizePostStatus(p.status) === "feedback").length,
+      in_progress: wp.filter((p) => normalizePostStatus(p.status) === "in_progress").length,
+      todo: wp.filter((p) => normalizePostStatus(p.status) === "todo").length,
     };
-  }, [filteredPosts, weekDays]);
+  }, [postsForCalendar, weekDays]);
 
   // ── Navigation ───────────────────────────────────────────────────────────
   function prev() {
@@ -524,7 +763,8 @@ export function Content() {
   }
   const formClientId =
     filterClientId !== "all" ? filterClientId : (clients[0]?.id ?? "");
-  const stats = viewMode === "month" ? monthStats : weekStats;
+  const stats =
+    viewMode === "month" ? monthStats : weekStats;
 
   async function copyPreviewLink(postId: string) {
     const link = `${window.location.origin}/preview/${postId}`;
@@ -543,7 +783,8 @@ export function Content() {
 
   // ── Shared post chip (month) ─────────────────────────────────────────────
   function PostChip({ post }: { post: Post }) {
-    const sc = postStatusChipColor[post.status] ?? postStatusChipColor['todo'];
+    const st = normalizePostStatus(post.status);
+    const sc = postStatusChipColor[st] ?? postStatusChipColor.todo;
     const Icon = TYPE_ICON[post.type];
     const clientName = clientMap[post.clientId] ?? "?";
     const isDragging = draggingPostId === post.id;
@@ -571,7 +812,7 @@ export function Content() {
         }}
         className={`flex items-start gap-2 px-2 py-1.5 rounded-md border transition-all cursor-grab active:cursor-grabbing bg-surface-1/90 ${sc.border} ${isDragging ? 'opacity-30 scale-[0.98]' : 'hover:bg-surface-1 hover:border-border-default'}`}
       >
-        <span className={`mt-[3px] w-1.5 h-1.5 rounded-full shrink-0 ${postStatusDot[post.status]}`} />
+        <span className={`mt-[3px] w-1.5 h-1.5 rounded-full shrink-0 ${postStatusDot[st]}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <Icon size={10} className="shrink-0 text-text-muted" />
@@ -594,11 +835,12 @@ export function Content() {
     compact?: boolean;
   }) {
     const Icon = TYPE_ICON[post.type];
-    const sc = postStatusChipColor[post.status] ?? postStatusChipColor['todo'];
+    const st = normalizePostStatus(post.status);
+    const sc = postStatusChipColor[st] ?? postStatusChipColor.todo;
     const clientName = clientMap[post.clientId] ?? "?";
     const primaryMediaUrl = post.mediaUrls?.[0] ?? post.mediaUrl;
     const mediaCount = post.mediaUrls?.length ?? (post.mediaUrl ? 1 : 0);
-    const statusBar: Record<Post['status'], string> = {
+    const statusBar: Record<PostStatus, string> = {
       todo: 'border-l-zinc-500',
       in_progress: 'border-l-orange-500',
       feedback: 'border-l-blue-500',
@@ -606,7 +848,7 @@ export function Content() {
     }
     return (
       <div
-        className={`group flex gap-3 p-3 rounded-lg border bg-surface-0 hover:bg-surface-1 transition-all border-l-[3px] ${statusBar[post.status]} ${sc.border}`}
+        className={`group flex gap-3 p-3 rounded-lg border bg-surface-0 hover:bg-surface-1 transition-all border-l-[3px] ${statusBar[st]} ${sc.border}`}
       >
         <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 border border-border-subtle bg-surface-2">
           <Icon size={13} className="text-text-secondary" />
@@ -617,9 +859,9 @@ export function Content() {
               {clientName}
             </span>
             <span
-              className={`text-xs px-1.5 py-0.5 rounded border font-medium ${postStatusColor[post.status]}`}
+              className={`text-xs px-1.5 py-0.5 rounded border font-medium ${postStatusColor[st]}`}
             >
-              {postStatusLabel(post.status)}
+              {postStatusLabel(st)}
             </span>
             <span className="text-xs text-text-muted">
               {postTypeLabel(post.type)}
@@ -681,10 +923,25 @@ export function Content() {
         actions={
           <>
             <ClientFilterCombobox value={filterClientId} onChange={setFilterClientId} clients={clients} />
+            <div className="flex items-center gap-2 shrink-0">
+              <Switch
+                id="week-todos-only"
+                checked={weekTodosOnly}
+                onCheckedChange={setWeekTodosOnly}
+                className="scale-90"
+              />
+              <Label htmlFor="week-todos-only" className="text-xs text-text-muted whitespace-nowrap cursor-pointer">
+                Alleen te doen deze week
+              </Label>
+            </div>
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList className="h-7">
+              <TabsList className="h-7 p-0.5">
                 <TabsTrigger value="month" className="text-xs h-6 px-2.5">Maand</TabsTrigger>
                 <TabsTrigger value="week" className="text-xs h-6 px-2.5">Week</TabsTrigger>
+                <TabsTrigger value="kanban" className="text-xs h-6 px-2.5 gap-1">
+                  <LayoutGrid size={12} className="opacity-70" />
+                  Kanban
+                </TabsTrigger>
                 <TabsTrigger value="list" className="text-xs h-6 px-2.5">Lijst</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -726,7 +983,7 @@ export function Content() {
       </div>
 
       {/* Kalender — alleen bij maand/week view */}
-      {viewMode !== "list" && <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
+      {viewMode !== "list" && viewMode !== "kanban" && <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
         {/* Navigatie */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
           <button
@@ -889,9 +1146,48 @@ export function Content() {
         )}
       </div>}
 
+      {/* ── KANBAN (zelfde week als week-view) ───────────────────────────── */}
+      {viewMode === "kanban" && (
+        <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
+            <button
+              type="button"
+              onClick={prev}
+              className="p-1.5 rounded-lg hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <h2 className="text-sm font-semibold text-text-primary capitalize">
+              {navLabel}
+            </h2>
+            <button
+              type="button"
+              onClick={next}
+              className="p-1.5 rounded-lg hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="p-4">
+            <ContentKanbanBoard
+              posts={kanbanPosts}
+              clientMap={clientMap}
+              onPostClick={(post) => {
+                setEditingPost(post);
+                setPostFormOpen(true);
+              }}
+              onStatusChange={(id, status) => {
+                void updatePost(id, { status });
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── LIJST VIEW ──────────────────────────────────────────────────── */}
       {viewMode === "list" && (() => {
-        const sorted = [...filteredPosts].sort((a, b) => {
+        const listSource = weekTodosOnly ? postsForCalendar : filteredPosts;
+        const sorted = [...listSource].sort((a, b) => {
           if (!a.date && !b.date) return 0
           if (!a.date) return 1
           if (!b.date) return -1
@@ -971,7 +1267,8 @@ export function Content() {
 
                 {/* Rijen */}
                 {group.posts.map((post) => {
-                  const sc = postStatusChipColor[post.status] ?? postStatusChipColor['todo']
+                  const st = normalizePostStatus(post.status);
+                  const sc = postStatusChipColor[st] ?? postStatusChipColor.todo;
                   const Icon = TYPE_ICON[post.type]
                   const clientName = clientMap[post.clientId] ?? '?'
                   const thumb = post.mediaUrls?.[0] ?? post.mediaUrl
@@ -1015,8 +1312,8 @@ export function Content() {
                       </div>
 
                       {/* Status */}
-                      <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border w-fit ${postStatusColor[post.status]}`}>
-                        {postStatusLabel(post.status)}
+                      <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border w-fit ${postStatusColor[st]}`}>
+                        {postStatusLabel(st)}
                       </span>
                     </div>
                   )

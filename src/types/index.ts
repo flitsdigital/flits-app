@@ -58,10 +58,31 @@ export type BillingCycle = '4_weeks' | '6_weeks' | 'monthly' | 'custom'
 
 export type ClientStatus = 'active' | 'paused' | 'inactive'
 
+/** Retainer/cyclus, project met termijnen, of eenmalige factuur */
+export type ClientType = 'recurring' | 'project' | 'oneoff'
+
+export type ClientInvoiceStatus = 'planned' | 'sent' | 'paid' | 'overdue'
+
 export interface InvoiceRecord {
   date: string // 'yyyy-MM-dd' — het gegenereerde factuurmoment
   invoiced: boolean
   invoicedAt?: string // ISO timestamp wanneer gemarkeerd
+}
+
+/** Milestone / eenmalige factuur (project & oneoff) */
+export interface ClientInvoice {
+  id: string
+  clientId: string
+  label: string
+  amount: number
+  percentage?: number
+  dueDate: string // 'yyyy-MM-dd'
+  status: ClientInvoiceStatus
+  invoiceNumber?: string
+  sentAt?: string
+  paidAt?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Client {
@@ -74,12 +95,18 @@ export interface Client {
   address: string
   vatNumber: string
   notes: string
+  /** Soort klant — default recurring voor bestaande data */
+  clientType: ClientType
+  /** Totaal contractbedrag (alleen project) */
+  projectBudget?: number
+  /** Deadline / oplevering (alleen project) */
+  projectDeadline?: string
   // Contract
   startDate: string // ISO date string
   endDate?: string
   status: ClientStatus
   packageType: string
-  // Facturatie
+  // Facturatie (primair recurring; optioneel voor project/oneoff in DB)
   billingCycle: BillingCycle
   customCycleDays?: number
   pricePerCycle: number

@@ -1,9 +1,21 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, UserPlus, ArrowUpDown } from 'lucide-react'
+import {
+  Plus,
+  Search,
+  UserPlus,
+  ArrowUpDown,
+  Sparkles,
+  Phone,
+  CheckCircle2,
+  FileText,
+  Trophy,
+  XCircle,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { nl } from 'date-fns/locale'
+import clsx from 'clsx'
 import { PageHeader } from '../components/PageHeader'
 import { LeadForm } from '../components/LeadForm'
 import { useLeadsData } from '../hooks/useLeadsData'
@@ -17,13 +29,85 @@ import { cn } from '@/lib/utils'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
-export const LEAD_STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; badge: string; dot: string }> = {
-  new:       { label: 'Nieuw',             color: 'bg-blue-500/10 border-blue-500/25',   badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',   dot: 'bg-blue-400' },
-  contacted: { label: 'Gecontacteerd',     color: 'bg-purple-500/10 border-purple-500/25', badge: 'bg-purple-500/15 text-purple-400 border-purple-500/25', dot: 'bg-purple-400' },
-  qualified: { label: 'Gekwalificeerd',    color: 'bg-orange-500/10 border-orange-500/25', badge: 'bg-orange-500/15 text-orange-400 border-orange-500/25', dot: 'bg-orange-400' },
-  proposal:  { label: 'Offerte verstuurd', color: 'bg-yellow-500/10 border-yellow-500/25', badge: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25', dot: 'bg-yellow-400' },
-  won:       { label: 'Gewonnen',          color: 'bg-green-500/10 border-green-500/25',  badge: 'bg-green-500/15 text-green-400 border-green-500/25',  dot: 'bg-green-400' },
-  lost:      { label: 'Verloren',          color: 'bg-zinc-500/10 border-zinc-500/25',    badge: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/25',    dot: 'bg-zinc-400' },
+export const LEAD_STATUS_CONFIG: Record<LeadStatus, {
+  label: string
+  // legacy props (still consumed in LeadDetail for the StatusDropdown)
+  color: string
+  badge: string
+  dot: string
+  // new Kanban props (mirrors the Project task-board styling)
+  Icon: React.ElementType
+  bg: string
+  headerBg: string
+  ring: string
+  text: string
+}> = {
+  new: {
+    label: 'Nieuw',
+    color: 'bg-blue-500/10 border-blue-500/25',
+    badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+    dot: 'bg-blue-400',
+    Icon: Sparkles,
+    bg: 'bg-blue-500/[0.06]',
+    headerBg: 'bg-blue-500/10',
+    ring: 'bg-blue-400',
+    text: 'text-blue-400',
+  },
+  contacted: {
+    label: 'Gecontacteerd',
+    color: 'bg-purple-500/10 border-purple-500/25',
+    badge: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+    dot: 'bg-purple-400',
+    Icon: Phone,
+    bg: 'bg-purple-500/[0.06]',
+    headerBg: 'bg-purple-500/10',
+    ring: 'bg-purple-400',
+    text: 'text-purple-400',
+  },
+  qualified: {
+    label: 'Gekwalificeerd',
+    color: 'bg-orange-500/10 border-orange-500/25',
+    badge: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+    dot: 'bg-orange-400',
+    Icon: CheckCircle2,
+    bg: 'bg-orange-500/[0.06]',
+    headerBg: 'bg-orange-500/10',
+    ring: 'bg-orange-400',
+    text: 'text-orange-400',
+  },
+  proposal: {
+    label: 'Offerte verstuurd',
+    color: 'bg-yellow-500/10 border-yellow-500/25',
+    badge: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+    dot: 'bg-yellow-400',
+    Icon: FileText,
+    bg: 'bg-yellow-500/[0.06]',
+    headerBg: 'bg-yellow-500/10',
+    ring: 'bg-yellow-400',
+    text: 'text-yellow-400',
+  },
+  won: {
+    label: 'Gewonnen',
+    color: 'bg-green-500/10 border-green-500/25',
+    badge: 'bg-green-500/15 text-green-400 border-green-500/25',
+    dot: 'bg-green-400',
+    Icon: Trophy,
+    bg: 'bg-green-500/[0.05]',
+    headerBg: 'bg-green-500/10',
+    ring: 'bg-green-400',
+    text: 'text-green-400',
+  },
+  lost: {
+    label: 'Verloren',
+    color: 'bg-zinc-500/10 border-zinc-500/25',
+    badge: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/25',
+    dot: 'bg-zinc-400',
+    Icon: XCircle,
+    bg: 'bg-zinc-500/[0.05]',
+    headerBg: 'bg-zinc-500/10',
+    ring: 'bg-zinc-400',
+    text: 'text-zinc-400',
+  },
 }
 
 const PIPELINE: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost']
@@ -35,27 +119,39 @@ function lastContactLabel(dateStr?: string) {
   return formatDistanceToNow(parseISO(dateStr), { addSuffix: true, locale: nl })
 }
 
-// ── Lead card (Kanban) ────────────────────────────────────────────────────────
+// ── Lead Card (Kanban) ────────────────────────────────────────────────────────
 
 function LeadCard({
   lead,
-  onDragStart,
   onClick,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   lead: Lead
-  onDragStart: (e: React.DragEvent, lead: Lead) => void
-  onClick: (id: string) => void
+  onClick: () => void
+  isDragging: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
 }) {
-  const cfg = LEAD_STATUS_CONFIG[lead.status]
+  const initials = lead.companyName.charAt(0).toUpperCase()
   return (
     <div
       draggable
-      onDragStart={(e) => onDragStart(e, lead)}
-      onClick={() => onClick(lead.id)}
-      className="bg-surface-3 border border-border-subtle rounded-lg p-3 cursor-pointer hover:border-border-default transition-colors group"
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart()
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onClick}
+      className={clsx(
+        'bg-surface-0 border border-border-subtle rounded-lg p-3 cursor-grab active:cursor-grabbing',
+        'hover:border-zinc-500 hover:shadow-lg hover:shadow-black/20 transition-all group select-none',
+        isDragging && 'opacity-40 scale-[0.98]',
+      )}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-sm font-medium text-text-primary leading-snug group-hover:text-accent-blue transition-colors">
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <p className="text-sm text-text-primary leading-snug group-hover:text-white transition-colors font-medium">
           {lead.companyName}
         </p>
         {lead.estimatedValue != null && (
@@ -64,67 +160,150 @@ function LeadCard({
           </span>
         )}
       </div>
-      <p className="text-xs text-text-muted mb-2">{lead.contactPerson}</p>
-      <div className="flex items-center justify-between">
-        <span className={cn('text-xs px-1.5 py-0.5 rounded border font-medium', cfg.badge)}>
-          {cfg.label}
-        </span>
-        {lead.lastContactedAt && (
-          <span className="text-xs text-text-muted">{lastContactLabel(lead.lastContactedAt)}</span>
+
+      <p className="text-xs text-text-muted mb-2 truncate">{lead.contactPerson}</p>
+
+      <div className="flex items-center gap-1.5">
+        {lead.lastContactedAt ? (
+          <span className="text-xs text-text-muted">
+            {lastContactLabel(lead.lastContactedAt)}
+          </span>
+        ) : (
+          <span className="text-xs text-text-muted/60 italic">Nog geen contact</span>
         )}
+
+        <div className="ml-auto w-5 h-5 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center">
+          <span className="text-[9px] font-semibold text-accent-blue">{initials}</span>
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Kanban column ─────────────────────────────────────────────────────────────
+// ── Kanban Board ──────────────────────────────────────────────────────────────
 
-function KanbanColumn({
-  status,
+function LeadsKanban({
   leads,
-  onDragStart,
-  onDrop,
-  onDragOver,
   onCardClick,
+  onAddLead,
+  onStatusChange,
 }: {
-  status: LeadStatus
   leads: Lead[]
-  onDragStart: (e: React.DragEvent, lead: Lead) => void
-  onDrop: (e: React.DragEvent, status: LeadStatus) => void
-  onDragOver: (e: React.DragEvent) => void
   onCardClick: (id: string) => void
+  onAddLead: (status: LeadStatus) => void
+  onStatusChange: (leadId: string, newStatus: LeadStatus) => void
 }) {
-  const cfg = LEAD_STATUS_CONFIG[status]
-  const total = leads.reduce((sum, l) => sum + (l.estimatedValue ?? 0), 0)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<LeadStatus | null>(null)
+
+  const byStatus = useMemo(() => {
+    const map: Record<LeadStatus, Lead[]> = { new: [], contacted: [], qualified: [], proposal: [], won: [], lost: [] }
+    leads.forEach((l) => map[l.status].push(l))
+    return map
+  }, [leads])
+
+  function handleDragOver(e: React.DragEvent, status: LeadStatus) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverStatus(status)
+  }
+
+  function handleDrop(e: React.DragEvent, status: LeadStatus) {
+    e.preventDefault()
+    if (draggedId) {
+      const lead = leads.find((l) => l.id === draggedId)
+      if (lead && lead.status !== status) {
+        onStatusChange(draggedId, status)
+      }
+    }
+    setDraggedId(null)
+    setDragOverStatus(null)
+  }
 
   return (
-    <div
-      className="flex flex-col min-w-[220px] w-[220px]"
-      onDrop={(e) => onDrop(e, status)}
-      onDragOver={onDragOver}
-    >
-      <div className="flex items-center gap-2 mb-3 px-0.5">
-        <span className={cn('w-2 h-2 rounded-full shrink-0', cfg.dot)} />
-        <span className="text-xs font-semibold text-text-secondary">{cfg.label}</span>
-        <span className="ml-auto text-xs text-text-muted bg-surface-3 border border-border-subtle rounded px-1.5 py-0.5 font-medium">
-          {leads.length}
-        </span>
-      </div>
-      {total > 0 && (
-        <p className="text-xs text-text-muted mb-2 px-0.5">
-          €{total.toLocaleString('nl-NL')} totaal
-        </p>
-      )}
-      <div className="flex flex-col gap-2 min-h-[80px]">
-        {leads.map((lead) => (
-          <LeadCard
-            key={lead.id}
-            lead={lead}
-            onDragStart={onDragStart}
-            onClick={onCardClick}
-          />
-        ))}
-      </div>
+    <div className="flex gap-3 h-full overflow-x-auto pb-4">
+      {PIPELINE.map((status) => {
+        const cfg = LEAD_STATUS_CONFIG[status]
+        const Icon = cfg.Icon
+        const isOver = dragOverStatus === status
+        const isDragSource = draggedId !== null && byStatus[status].some((l) => l.id === draggedId)
+        const total = byStatus[status].reduce((sum, l) => sum + (l.estimatedValue ?? 0), 0)
+
+        return (
+          <div
+            key={status}
+            onDragOver={(e) => handleDragOver(e, status)}
+            onDragLeave={() => setDragOverStatus(null)}
+            onDrop={(e) => handleDrop(e, status)}
+            className={clsx(
+              'flex flex-col w-[272px] shrink-0 rounded-xl overflow-hidden border transition-all duration-150',
+              cfg.bg,
+              isOver
+                ? 'border-accent-blue/60 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
+                : isDragSource
+                  ? 'border-zinc-700'
+                  : 'border-border-subtle',
+            )}
+          >
+            {/* Column header */}
+            <div className={clsx('flex items-center gap-2 px-3 py-2.5 border-b border-border-subtle', cfg.headerBg)}>
+              <div className={clsx('w-2 h-2 rounded-full shrink-0', cfg.ring)} />
+              <Icon size={13} className={cfg.text} />
+              <span className={clsx('text-xs font-semibold uppercase tracking-wider', cfg.text)}>{cfg.label}</span>
+              <span
+                className={clsx(
+                  'ml-auto text-xs font-medium px-1.5 py-0.5 rounded-full',
+                  byStatus[status].length > 0 ? `${cfg.text} bg-white/[0.08]` : 'text-text-muted',
+                )}
+              >
+                {byStatus[status].length}
+              </span>
+            </div>
+
+            {total > 0 && (
+              <div className="px-3 py-1.5 border-b border-border-subtle/50 text-[10px] text-text-muted">
+                €{total.toLocaleString('nl-NL')} totaal
+              </div>
+            )}
+
+            {/* Cards + drop zone */}
+            <div
+              className={clsx(
+                'flex-1 overflow-y-auto p-2 space-y-2 transition-colors duration-150',
+                isOver && byStatus[status].length === 0 && 'bg-accent-blue/[0.06]',
+              )}
+            >
+              {byStatus[status].map((lead) => (
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  onClick={() => { if (!draggedId) onCardClick(lead.id) }}
+                  isDragging={draggedId === lead.id}
+                  onDragStart={() => setDraggedId(lead.id)}
+                  onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
+                />
+              ))}
+
+              {isOver && draggedId && !byStatus[status].some((l) => l.id === draggedId) && (
+                <div className="border-2 border-dashed border-accent-blue/40 rounded-lg h-16 flex items-center justify-center">
+                  <span className="text-xs text-accent-blue/60">Hier neerzetten</span>
+                </div>
+              )}
+            </div>
+
+            {/* Add lead */}
+            <div className="p-2 border-t border-border-subtle">
+              <button
+                onClick={() => onAddLead(status)}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-lg transition-colors"
+              >
+                <Plus size={12} />
+                Lead toevoegen
+              </button>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -141,11 +320,11 @@ export function Leads() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [showForm, setShowForm] = useState(false)
+  const [defaultStatus, setDefaultStatus] = useState<LeadStatus | undefined>()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortAsc, setSortAsc] = useState(false)
-  const [draggingLead, setDraggingLead] = useState<Lead | null>(null)
 
   const filtered = useMemo(() => {
     let list = leads.filter((l) => {
@@ -168,28 +347,11 @@ export function Leads() {
     return list
   }, [leads, search, filterStatus, sortKey, sortAsc])
 
-  const byStatus = useMemo(() => {
-    const map: Record<LeadStatus, Lead[]> = { new: [], contacted: [], qualified: [], proposal: [], won: [], lost: [] }
-    filtered.forEach((l) => map[l.status].push(l))
-    return map
-  }, [filtered])
-
-  function handleDragStart(e: React.DragEvent, lead: Lead) {
-    setDraggingLead(lead)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  async function handleDrop(e: React.DragEvent, status: LeadStatus) {
-    e.preventDefault()
-    if (!draggingLead || draggingLead.status === status) { setDraggingLead(null); return }
-    await updateLeadStatus(draggingLead.id, status)
-    toast.success(`${draggingLead.companyName} verplaatst naar ${LEAD_STATUS_CONFIG[status].label}`)
-    setDraggingLead(null)
+  async function handleStatusChange(leadId: string, newStatus: LeadStatus) {
+    const lead = leads.find((l) => l.id === leadId)
+    if (!lead) return
+    await updateLeadStatus(leadId, newStatus)
+    toast.success(`${lead.companyName} verplaatst naar ${LEAD_STATUS_CONFIG[newStatus].label}`)
   }
 
   function toggleSort(key: SortKey) {
@@ -197,26 +359,31 @@ export function Leads() {
     else { setSortKey(key); setSortAsc(true) }
   }
 
+  function openAddForm(status?: LeadStatus) {
+    setDefaultStatus(status)
+    setShowForm(true)
+  }
+
   const totalPipeline = leads
     .filter((l) => !['won', 'lost'].includes(l.status))
     .reduce((sum, l) => sum + (l.estimatedValue ?? 0), 0)
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <PageHeader
         title="Leads"
         subtitle={`${leads.length} leads · €${totalPipeline.toLocaleString('nl-NL')} in pipeline`}
         actions={
-          <Button size="sm" onClick={() => setShowForm(true)} className="h-7 text-xs gap-1.5">
+          <Button size="sm" onClick={() => openAddForm()} className="h-7 text-xs gap-1.5">
             <Plus size={14} />
             Nieuwe lead
           </Button>
         }
       />
 
-      <div className="px-6 py-5">
+      <div className={clsx('flex-1 px-6 py-5 flex flex-col min-h-0', viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
         {/* Toolbar */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 mb-5 shrink-0">
           <div className="relative flex-1 max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <Input
@@ -252,20 +419,19 @@ export function Leads() {
 
         {/* Kanban view */}
         {viewMode === 'kanban' && (
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-4" style={{ minWidth: PIPELINE.length * 236 }}>
-              {PIPELINE.map((status) => (
-                <KanbanColumn
-                  key={status}
-                  status={status}
-                  leads={byStatus[status]}
-                  onDragStart={handleDragStart}
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onCardClick={(id) => navigate(`/leads/${id}`)}
-                />
-              ))}
-            </div>
+          <div className="flex-1 min-h-0">
+            {loading && leads.length === 0 ? (
+              <div className="flex justify-center py-16">
+                <div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <LeadsKanban
+                leads={filtered}
+                onCardClick={(id) => navigate(`/leads/${id}`)}
+                onAddLead={(status) => openAddForm(status)}
+                onStatusChange={handleStatusChange}
+              />
+            )}
           </div>
         )}
 
@@ -340,11 +506,12 @@ export function Leads() {
 
       <LeadForm
         open={showForm}
-        onClose={() => setShowForm(false)}
+        onClose={() => { setShowForm(false); setDefaultStatus(undefined) }}
         onSave={async (data) => {
-          await addLead(data)
+          await addLead({ ...data, status: defaultStatus ?? data.status })
           toast.success('Lead aangemaakt')
           setShowForm(false)
+          setDefaultStatus(undefined)
         }}
       />
     </div>

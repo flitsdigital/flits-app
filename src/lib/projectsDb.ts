@@ -1,6 +1,112 @@
 import { supabaseAdmin, withTimeout } from './supabase'
 import type { Project, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../types'
 
+// ── Task Comments ──────────────────────────────────────────────────────────────
+
+export interface TaskComment {
+  id: string
+  taskId: string
+  authorId: string
+  authorEmail: string
+  authorName: string | null
+  content: string
+  createdAt: string
+}
+
+interface DbTaskComment {
+  id: string
+  task_id: string
+  author_id: string
+  author_email: string
+  author_name: string | null
+  content: string
+  created_at: string
+}
+
+function mapComment(row: DbTaskComment): TaskComment {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    authorId: row.author_id,
+    authorEmail: row.author_email,
+    authorName: row.author_name,
+    content: row.content,
+    createdAt: row.created_at,
+  }
+}
+
+// ── Sprints ────────────────────────────────────────────────────────────────────
+
+export type SprintStatus = 'planned' | 'active' | 'closed'
+
+export interface Sprint {
+  id: string
+  projectId: string
+  name: string
+  startDate: string | null
+  endDate: string | null
+  status: SprintStatus
+  createdAt: string
+}
+
+interface DbSprint {
+  id: string
+  project_id: string
+  name: string
+  start_date: string | null
+  end_date: string | null
+  status: SprintStatus
+  created_at: string
+}
+
+function mapSprint(row: DbSprint): Sprint {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    status: row.status,
+    createdAt: row.created_at,
+  }
+}
+
+// ── Project Activity ───────────────────────────────────────────────────────────
+
+export type ActivityAction = 'task_created' | 'status_changed' | 'commented' | 'assigned' | 'sprint_changed' | 'task_deleted'
+
+export interface ProjectActivity {
+  id: string
+  projectId: string
+  taskId: string | null
+  actorEmail: string
+  action: ActivityAction
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+interface DbProjectActivity {
+  id: string
+  project_id: string
+  task_id: string | null
+  actor_email: string
+  action: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+function mapActivity(row: DbProjectActivity): ProjectActivity {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    taskId: row.task_id,
+    actorEmail: row.actor_email,
+    action: row.action as ActivityAction,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+  }
+}
+
 interface DbProject {
   id: string
   client_id: string
@@ -219,5 +325,124 @@ export const projectsDb = {
   async deleteSubtask(id: string): Promise<void> {
     const { error } = await withTimeout(supabaseAdmin.from('subtasks').delete().eq('id', id))
     if (error) throw error
+  },
+
+  // ── Task Comments ─────────────────────────────────────────────────────────
+
+  async fetchTaskComments(taskId: string): Promise<TaskComment[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('task_comments').select('*').eq('task_id', taskId).order('created_at')
+    )
+    if (error) throw error
+    return (data as DbTaskComment[] ?? []).map(mapComment)
+  },
+
+  async addTaskComment(input: {
+    taskId: string
+    authorId: string
+    authorEmail: string
+    authorName?: string | null
+    content: string
+  }): Promise<TaskComment> {
+    const payload = {
+      id: crypto.randomUUID(),
+      task_id: input.taskId,
+      author_id: input.authorId,
+      author_email: input.authorEmail,
+      author_name: input.authorName ?? null,
+      content: input.content,
+    }
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('task_comments').insert(payload as never).select().single()
+    )
+    if (error) throw error
+    return mapComment(data as DbTaskComment)
+  },
+
+  async deleteTaskComment(id: string): Promise<void> {
+    const { error } = await withTimeout(supabaseAdmin.from('task_comments').delete().eq('id', id))
+    if (error) throw error
+  },
+
+  // ── Sprints ───────────────────────────────────────────────────────────────
+
+  async fetchSprints(projectId: string): Promise<Sprint[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('sprints').select('*').eq('project_id', projectId).order('created_at')
+    )
+    if (error) throw error
+    return (data as DbSprint[] ?? []).map(mapSprint)
+  },
+
+  async saveSprint(input: {
+    id?: string
+    projectId: string
+    name: string
+    startDate?: string | null
+    endDate?: string | null
+    status?: SprintStatus
+  }): Promise<Sprint> {
+    const payload: Record<string, unknown> = {
+      id: input.id ?? crypto.randomUUID(),
+      project_id: input.projectId,
+      name: input.name,
+      start_date: input.startDate ?? null,
+      end_date: input.endDate ?? null,
+      status: input.status ?? 'planned',
+    }
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('sprints').upsert(payload as never).select().single()
+    )
+    if (error) throw error
+    return mapSprint(data as DbSprint)
+  },
+
+  async deleteSprint(id: string): Promise<void> {
+    const { error } = await withTimeout(supabaseAdmin.from('sprints').delete().eq('id', id))
+    if (error) throw error
+  },
+
+  async updateTaskSprint(taskId: string, sprintId: string | null): Promise<void> {
+    const { error } = await withTimeout(
+      supabaseAdmin.from('tasks').update({ sprint_id: sprintId, updated_at: new Date().toISOString() } as never).eq('id', taskId)
+    )
+    if (error) throw error
+  },
+
+  // ── Project Activity ──────────────────────────────────────────────────────
+
+  async fetchProjectActivity(projectId: string): Promise<ProjectActivity[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin
+        .from('project_activity')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+    )
+    if (error) throw error
+    return (data as DbProjectActivity[] ?? []).map(mapActivity)
+  },
+
+  async logActivity(input: {
+    projectId: string
+    taskId?: string | null
+    actorEmail: string
+    action: ActivityAction
+    metadata?: Record<string, unknown> | null
+  }): Promise<void> {
+    const payload = {
+      id: crypto.randomUUID(),
+      project_id: input.projectId,
+      task_id: input.taskId ?? null,
+      actor_email: input.actorEmail,
+      action: input.action,
+      metadata: input.metadata ?? null,
+    }
+    const { error } = await withTimeout(supabaseAdmin.from('project_activity').insert(payload as never))
+    if (error) {
+      // Activity logging is non-critical; suppress errors
+      console.warn('Failed to log activity:', error.message)
+    }
   },
 }
