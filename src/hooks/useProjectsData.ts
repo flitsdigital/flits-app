@@ -6,6 +6,7 @@ export interface UserProfileLite {
   id: string
   email: string
   name?: string | null
+  avatar_url?: string | null
 }
 
 export function useProjectsData() {

@@ -44,6 +44,8 @@ export interface TimeEntry {
   id: string
   userId: string
   clientId: string | null   // optioneel
+  projectId?: string | null // optioneel — koppeling aan project
+  taskId?: string | null    // optioneel — koppeling aan taak
   description: string
   startedAt: string         // ISO timestamptz
   endedAt: string | null    // null = lopende timer
@@ -72,6 +74,7 @@ export interface UserProfile {
   name?: string | null
   role: UserRole
   allowed_pages: AppPage[]
+  avatar_url?: string | null
 }
 
 export type BillingCycle = '4_weeks' | '6_weeks' | 'monthly' | 'custom'
@@ -199,9 +202,19 @@ export interface Task {
   priority: TaskPriority
   assigneeId?: string | null
   dueDate?: string | null
+  sprintId?: string | null
+  labelIds?: string[]
   position: number
   createdAt: string
   updatedAt: string
+}
+
+export interface ProjectLabel {
+  id: string
+  projectId: string
+  name: string
+  color: string
+  createdAt: string
 }
 
 export interface Subtask {

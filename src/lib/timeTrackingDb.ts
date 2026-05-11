@@ -7,6 +7,8 @@ interface DbTimeEntry {
   id: string
   user_id: string
   client_id: string | null
+  project_id: string | null
+  task_id: string | null
   description: string
   started_at: string
   ended_at: string | null
@@ -30,6 +32,8 @@ function entryFromRow(row: DbTimeEntry): TimeEntry {
     id: row.id,
     userId: row.user_id,
     clientId: row.client_id,
+    projectId: row.project_id,
+    taskId: row.task_id,
     description: row.description ?? '',
     startedAt: row.started_at,
     endedAt: row.ended_at,
@@ -169,6 +173,8 @@ export const timeTrackingDb = {
   async createEntry(input: {
     userId: string
     clientId: string | null
+    projectId?: string | null
+    taskId?: string | null
     description: string
     startedAt: string
     endedAt: string
@@ -181,6 +187,8 @@ export const timeTrackingDb = {
         .insert({
           user_id: input.userId,
           client_id: input.clientId,
+          project_id: input.projectId ?? null,
+          task_id: input.taskId ?? null,
           description: input.description,
           started_at: input.startedAt,
           ended_at: input.endedAt,
@@ -200,6 +208,8 @@ export const timeTrackingDb = {
     id: string,
     input: {
       clientId: string | null
+      projectId?: string | null
+      taskId?: string | null
       description: string
       startedAt: string
       endedAt: string | null
@@ -211,6 +221,8 @@ export const timeTrackingDb = {
         .from('time_entries')
         .update({
           client_id: input.clientId,
+          project_id: input.projectId ?? null,
+          task_id: input.taskId ?? null,
           description: input.description,
           started_at: input.startedAt,
           ended_at: input.endedAt,
@@ -223,6 +235,14 @@ export const timeTrackingDb = {
     )
     if (error) throw error
     return entryFromRow(data as DbTimeEntry)
+  },
+
+  async fetchEntriesForTask(taskId: string): Promise<TimeEntry[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('time_entries').select('*').eq('task_id', taskId).order('started_at', { ascending: false })
+    )
+    if (error) throw error
+    return (data as DbTimeEntry[] ?? []).map(entryFromRow)
   },
 
   async deleteEntry(id: string, isAdmin: boolean): Promise<void> {

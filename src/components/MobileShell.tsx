@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Menu, Bell, MoreHorizontal, LogOut, Zap } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { UserAvatar } from './UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
@@ -33,13 +33,6 @@ export function MobileShell({ className }: Props) {
   const primaryNav = nav.filter((n) => MOBILE_PRIMARY_PAGES.includes(n.page as never))
   const overflowNav = nav.filter((n) => !MOBILE_PRIMARY_PAGES.includes(n.page as never))
   if (isAdmin) overflowNav.push(SETTINGS_NAV)
-
-  const initials = (profile?.name ?? profile?.email ?? 'U')
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
 
   return (
     <div className={cn('contents', className)}>
@@ -84,11 +77,7 @@ export function MobileShell({ className }: Props) {
           )}
         </button>
 
-        <Avatar className="w-7 h-7 text-2xs shrink-0">
-          <AvatarFallback className="bg-surface-3 text-text-secondary border border-border-default text-2xs font-semibold">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar profile={profile} size="w-7 h-7" textSize="text-[10px]" className="shrink-0" />
       </header>
 
       {/* NavDrawer */}
@@ -154,11 +143,7 @@ export function MobileShell({ className }: Props) {
 
           <Separator className="bg-border-subtle" />
           <div className="p-3 flex items-center gap-2">
-            <Avatar className="w-8 h-8 text-xs shrink-0">
-              <AvatarFallback className="bg-surface-3 text-text-secondary border border-border-default text-xs font-semibold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar profile={profile} size="w-8 h-8" textSize="text-xs" className="shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-text-primary truncate leading-tight">
                 {profile?.name ?? profile?.email ?? ''}

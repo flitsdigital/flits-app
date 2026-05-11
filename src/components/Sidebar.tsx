@@ -4,12 +4,13 @@ import { useAuthStore } from '../store/useAuthStore'
 import { useUIStore } from '../store/useUIStore'
 import { useTodosData } from '../hooks/useTodosData'
 import { useNotifications } from '../hooks/useNotifications'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { UserAvatar } from './UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { filterNavForUser, ALL_NAV, SETTINGS_NAV, type NavEntry } from '../lib/nav'
+import { useAppearanceStore } from '../store/useAppearanceStore'
 
 function NavItem({
   to,
@@ -46,6 +47,7 @@ interface Props {
 
 export function Sidebar({ className, onNavigate }: Props) {
   const profile = useAuthStore((s) => s.profile)
+  const workspaceName = useAppearanceStore((s) => s.workspaceName)
   const signOut = useAuthStore((s) => s.signOut)
   const toggleTodo = useUIStore((s) => s.toggleTodo)
   const toggleInbox = useUIStore((s) => s.toggleInbox)
@@ -58,13 +60,6 @@ export function Sidebar({ className, onNavigate }: Props) {
   // show the full nav instead of collapsing to an empty list. The correct filtered
   // nav replaces it as soon as the profile arrives.
   const nav = profile ? filterNavForUser(profile) : session ? ALL_NAV : []
-
-  const initials = (profile?.name ?? profile?.email ?? 'U')
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
 
   return (
     <aside
@@ -80,7 +75,7 @@ export function Sidebar({ className, onNavigate }: Props) {
             <Zap size={11} className="text-yellow-900 fill-yellow-900" />
           </div>
           <span className="text-sm font-semibold text-text-primary truncate leading-none">
-            Flits Impact
+            {workspaceName}
           </span>
         </div>
       </div>
@@ -144,15 +139,11 @@ export function Sidebar({ className, onNavigate }: Props) {
           </TooltipProvider>
         </div>
 
-        {isAdmin && <NavItem {...SETTINGS_NAV} onNavigate={onNavigate} />}
+        <NavItem {...SETTINGS_NAV} onNavigate={onNavigate} />
 
         {/* User row */}
         <div className="flex items-center gap-2 px-2.5 py-[5px] mt-1">
-          <Avatar className="w-5 h-5 text-2xs shrink-0">
-            <AvatarFallback className="bg-surface-4 text-text-secondary border border-border-default text-2xs font-semibold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar profile={profile} size="w-5 h-5" textSize="text-[9px]" className="shrink-0" />
           <span className="text-sm text-text-secondary truncate flex-1 leading-none">
             {profile?.name ?? profile?.email ?? ''}
           </span>

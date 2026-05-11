@@ -1,5 +1,5 @@
 import { supabaseAdmin, withTimeout } from './supabase'
-import type { Project, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../types'
+import type { Project, ProjectLabel, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../types'
 
 // ── Task Comments ──────────────────────────────────────────────────────────────
 
@@ -127,9 +127,28 @@ interface DbTask {
   priority: TaskPriority
   assignee_id: string | null
   due_date: string | null
+  sprint_id: string | null
   position: number
   created_at: string
   updated_at: string
+}
+
+interface DbProjectLabel {
+  id: string
+  project_id: string
+  name: string
+  color: string
+  created_at: string
+}
+
+function mapLabel(row: DbProjectLabel): ProjectLabel {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    color: row.color,
+    createdAt: row.created_at,
+  }
 }
 
 interface DbSubtask {
@@ -155,7 +174,7 @@ function mapProject(row: DbProject): Project {
   }
 }
 
-function mapTask(row: DbTask): Task {
+function mapTask(row: DbTask & { label_ids?: string[] }): Task {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -165,6 +184,8 @@ function mapTask(row: DbTask): Task {
     priority: row.priority,
     assigneeId: row.assignee_id,
     dueDate: row.due_date,
+    sprintId: row.sprint_id,
+    labelIds: row.label_ids ?? [],
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -224,9 +245,9 @@ export const projectsDb = {
     return (data as DbTask[] ?? []).map(mapTask)
   },
 
-  async fetchProfilesBasic(): Promise<Array<{ id: string; email: string; name?: string | null }>> {
+  async fetchProfilesBasic(): Promise<Array<{ id: string; email: string; name?: string | null; avatar_url?: string | null }>> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('profiles').select('id, email, name').order('created_at')
+      supabaseAdmin.from('profiles').select('id, email, name, avatar_url').order('created_at')
     )
     if (error) throw error
     return data ?? []
@@ -263,6 +284,26 @@ export const projectsDb = {
     if (error) throw error
   },
 
+  async fetchTask(taskId: string): Promise<Task & { subtasks: Subtask[]; comments: TaskComment[] }> {
+    const [taskRes, subtasksRes, commentsRes] = await Promise.all([
+      withTimeout(supabaseAdmin.from('tasks').select('*').eq('id', taskId).single()),
+      withTimeout(supabaseAdmin.from('subtasks').select('*').eq('task_id', taskId).order('position')),
+      withTimeout(supabaseAdmin.from('task_comments').select('*').eq('task_id', taskId).order('created_at')),
+    ])
+    if (taskRes.error) throw taskRes.error
+    const task = mapTask(taskRes.data as DbTask)
+    // Fetch label ids
+    const { data: labelRows } = await withTimeout(
+      supabaseAdmin.from('task_labels').select('label_id').eq('task_id', taskId)
+    )
+    task.labelIds = (labelRows ?? []).map((r: { label_id: string }) => r.label_id)
+    return {
+      ...task,
+      subtasks: (subtasksRes.data as DbSubtask[] ?? []).map(mapSubtask),
+      comments: (commentsRes.data as DbTaskComment[] ?? []).map(mapComment),
+    }
+  },
+
   async saveTask(input: {
     id?: string
     projectId: string
@@ -272,6 +313,7 @@ export const projectsDb = {
     priority: TaskPriority
     assigneeId?: string | null
     dueDate?: string | null
+    sprintId?: string | null
     position?: number
   }): Promise<Task> {
     const payload = {
@@ -281,6 +323,7 @@ export const projectsDb = {
       priority: input.priority,
       assignee_id: input.assigneeId ?? null,
       due_date: input.dueDate ?? null,
+      sprint_id: input.sprintId ?? null,
       updated_at: new Date().toISOString(),
     }
 
@@ -452,5 +495,51 @@ export const projectsDb = {
       // Activity logging is non-critical; suppress errors
       console.warn('Failed to log activity:', error.message)
     }
+  },
+
+  // ── Labels ────────────────────────────────────────────────────────────────
+
+  async fetchProjectLabels(projectId: string): Promise<ProjectLabel[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('project_labels').select('*').eq('project_id', projectId).order('created_at')
+    )
+    if (error) throw error
+    return (data as DbProjectLabel[] ?? []).map(mapLabel)
+  },
+
+  async createLabel(projectId: string, name: string, color: string): Promise<ProjectLabel> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('project_labels').insert({ project_id: projectId, name, color } as never).select().single()
+    )
+    if (error) throw error
+    return mapLabel(data as DbProjectLabel)
+  },
+
+  async updateLabel(id: string, patch: { name?: string; color?: string }): Promise<ProjectLabel> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('project_labels').update(patch as never).eq('id', id).select().single()
+    )
+    if (error) throw error
+    return mapLabel(data as DbProjectLabel)
+  },
+
+  async deleteLabel(id: string): Promise<void> {
+    const { error } = await withTimeout(supabaseAdmin.from('project_labels').delete().eq('id', id))
+    if (error) throw error
+  },
+
+  async setTaskLabels(taskId: string, labelIds: string[]): Promise<void> {
+    await withTimeout(supabaseAdmin.from('task_labels').delete().eq('task_id', taskId))
+    if (labelIds.length === 0) return
+    const rows = labelIds.map((label_id) => ({ task_id: taskId, label_id }))
+    const { error } = await withTimeout(supabaseAdmin.from('task_labels').insert(rows as never))
+    if (error) throw error
+  },
+
+  async fetchTaskLabelIds(taskId: string): Promise<string[]> {
+    const { data } = await withTimeout(
+      supabaseAdmin.from('task_labels').select('label_id').eq('task_id', taskId)
+    )
+    return (data ?? []).map((r: { label_id: string }) => r.label_id)
   },
 }

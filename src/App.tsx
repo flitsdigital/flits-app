@@ -16,6 +16,7 @@ import { Settings } from './pages/Settings'
 import { TravelExpenses } from './pages/TravelExpenses'
 import { TimeTracking } from './pages/TimeTracking'
 import { Projects } from './pages/Projects'
+import { TaskDetail } from './pages/TaskDetail'
 import { Leads } from './pages/Leads'
 import { LeadDetail } from './pages/LeadDetail'
 import { ScrollToTop } from './components/ScrollToTop'
@@ -111,6 +112,7 @@ export default function App() {
 
             <Route element={<ProtectedRoute page="projects" />}>
               <Route path="projects" element={<Projects />} />
+              <Route path="projecten/:projectId/taken/:taskId" element={<TaskDetail />} />
             </Route>
 
             <Route element={<ProtectedRoute page="leads" />}>
@@ -118,7 +120,7 @@ export default function App() {
               <Route path="leads/:id" element={<LeadDetail />} />
             </Route>
 
-            {/* Settings: admin only */}
+            {/* Settings: accessible to all logged-in users (page guards admin sections internally) */}
             <Route path="settings" element={<Settings />} />
 
           </Route>

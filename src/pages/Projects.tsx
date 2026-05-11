@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Plus, ChevronLeft, X, Trash2, Check, Flag,
   Folder, Circle, CircleDot, Eye, CheckCircle2,
@@ -11,13 +12,14 @@ import { projectsDb, type TaskComment, type Sprint, type SprintStatus, type Proj
 import { useStore } from '../store/useStore'
 import { useAuthStore } from '../store/useAuthStore'
 import { usePageMeta } from '../hooks/usePageMeta'
+import { PageHeader } from '../components/PageHeader'
 import { useProjectsData, UserProfileLite } from '../hooks/useProjectsData'
 import { notificationsDb } from '../lib/notificationsDb'
 import { errorMessage } from '../lib/errors'
 import { parseMentions } from '../components/MentionTextarea'
 import { MentionTextarea } from '../components/MentionTextarea'
 import clsx from 'clsx'
-import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus } from '../types'
+import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus, ProjectLabel } from '../types'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +32,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { PillDropdown } from '@/components/ui/pill-dropdown'
 import { cn } from '@/lib/utils'
+import { UserAvatar } from '../components/UserAvatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { SprintModal } from '../components/projects/SprintModal'
+import { FilterBar, TaskFilters, EMPTY_FILTERS, hasActiveFilters } from '../components/projects/FilterBar'
+import { BulkActionBar } from '../components/projects/BulkActionBar'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -505,11 +511,15 @@ function TaskModal({
                 <div className="space-y-3 mb-3">
                   {comments.map(c => {
                     const name = c.authorName ?? c.authorEmail.split('@')[0]
+                    const commenterProfile = profiles.find(p => p.email === c.authorEmail)
                     return (
                       <div key={c.id} className="flex gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0">
-                          <span className="text-[9px] font-bold text-accent-blue">{name.charAt(0).toUpperCase()}</span>
-                        </div>
+                        <UserAvatar
+                          profile={commenterProfile ?? { email: c.authorEmail, name: c.authorName }}
+                          size="w-6 h-6"
+                          textSize="text-[9px]"
+                          className="shrink-0"
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 mb-0.5">
                             <span className="text-xs font-medium text-text-primary">{name}</span>
@@ -527,11 +537,7 @@ function TaskModal({
 
               {/* New comment */}
               <div className="flex gap-2 items-start">
-                <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-[9px] font-bold text-accent-blue">
-                    {(modalProfile?.name ?? modalProfile?.email ?? 'U').charAt(0).toUpperCase()}
-                  </span>
-                </div>
+                <UserAvatar profile={modalProfile} size="w-6 h-6" textSize="text-[9px]" className="shrink-0 mt-0.5" />
                 <div className="flex-1 relative">
                   <MentionTextarea
                     value={newComment}
@@ -592,13 +598,13 @@ function TaskModal({
             value={assigneeId || '__none__'}
             onChange={(v) => setAssigneeId(v === '__none__' ? '' : v)}
             renderLabel={() => assignee
-              ? <><div className="w-4 h-4 rounded-full bg-accent-blue/25 flex items-center justify-center text-[9px] font-bold text-accent-blue">{(assignee.name ?? assignee.email).charAt(0).toUpperCase()}</div><span>{assignee.name ?? assignee.email.split('@')[0]}</span></>
+              ? <><UserAvatar profile={assignee} size="w-4 h-4" textSize="text-[8px]" /><span>{assignee.name ?? assignee.email.split('@')[0]}</span></>
               : <><div className="w-4 h-4 rounded-full border border-dashed border-zinc-600" /><span className="text-zinc-500">Niemand</span></>
             }
             renderOption={id => {
               if (id === '__none__') return <><div className="w-4 h-4 rounded-full border border-dashed border-zinc-600" /><span>Niemand</span></>
               const p = profiles.find(x => x.id === id)!
-              return <><div className="w-4 h-4 rounded-full bg-accent-blue/25 flex items-center justify-center text-[9px] font-bold text-accent-blue">{(p.name ?? p.email).charAt(0).toUpperCase()}</div><span>{p.name ?? p.email.split('@')[0]}</span></>
+              return <><UserAvatar profile={p} size="w-4 h-4" textSize="text-[8px]" /><span>{p.name ?? p.email.split('@')[0]}</span></>
             }}
           />
 
@@ -642,21 +648,21 @@ function TaskModal({
 // ── Task Card (Kanban) ─────────────────────────────────────────────────────────
 
 function TaskCard({
-  task, profiles, onClick, isDragging,
+  task, profiles, onClick, isDragging, isSelected, onSelect,
   onDragStart, onDragEnd,
 }: {
   task: Task
   profiles: UserProfileLite[]
   onClick: () => void
   isDragging: boolean
+  isSelected?: boolean
+  onSelect?: (e: React.MouseEvent) => void
   onDragStart: () => void
   onDragEnd: () => void
 }) {
   const assignee = profiles.find(p => p.id === task.assigneeId)
   const prio = PRIORITY_CONFIG[task.priority]
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
-  const initials = assignee ? (assignee.name ?? assignee.email).charAt(0).toUpperCase() : null
-
   return (
     <div
       draggable
@@ -665,12 +671,29 @@ function TaskCard({
       onClick={onClick}
       className={clsx(
         'bg-surface-0 border border-border-subtle rounded-lg p-3 cursor-grab active:cursor-grabbing',
-        'hover:border-zinc-500 hover:shadow-lg hover:shadow-black/20 transition-all group border-l-[3px] select-none',
+        'hover:border-zinc-500 hover:shadow-lg hover:shadow-black/20 transition-all group border-l-[3px] select-none relative',
         prio.border,
         isDragging && 'opacity-40 scale-[0.98]',
+        isSelected && 'ring-1 ring-accent-blue/50 border-accent-blue/50',
       )}
     >
-      <p className="text-sm text-text-primary leading-snug group-hover:text-white transition-colors mb-2">
+      {/* Selection checkbox */}
+      {onSelect && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onSelect(e) }}
+          className={clsx(
+            'absolute top-2 right-2 w-4 h-4 rounded border transition-all',
+            isSelected
+              ? 'bg-accent-blue border-accent-blue flex items-center justify-center'
+              : 'border-zinc-600 bg-transparent opacity-0 group-hover:opacity-100',
+          )}
+        >
+          {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
+        </button>
+      )}
+
+      <p className="text-sm text-text-primary leading-snug group-hover:text-white transition-colors mb-2 pr-5">
         {task.title}
       </p>
 
@@ -693,10 +716,8 @@ function TaskCard({
             {new Date(task.dueDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
           </span>
         )}
-        {initials && (
-          <div className="ml-auto w-5 h-5 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center">
-            <span className="text-[9px] font-semibold text-accent-blue">{initials}</span>
-          </div>
+        {assignee && (
+          <UserAvatar profile={assignee} size="w-5 h-5 ml-auto" textSize="text-[8px]" />
         )}
       </div>
     </div>
@@ -706,13 +727,15 @@ function TaskCard({
 // ── Kanban Board ───────────────────────────────────────────────────────────────
 
 function KanbanBoard({
-  tasks, profiles, onTaskClick, onAddTask, onStatusChange,
+  tasks, profiles, onTaskClick, onAddTask, onStatusChange, selectedTaskIds, onSelectTask,
 }: {
   tasks: Task[]
   profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
   onAddTask: (status: TaskStatus) => void
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void
+  selectedTaskIds?: Set<string>
+  onSelectTask?: (id: string) => void
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
@@ -790,6 +813,8 @@ function KanbanBoard({
                   profiles={profiles}
                   onClick={() => { if (!draggedId) onTaskClick(task) }}
                   isDragging={draggedId === task.id}
+                  isSelected={selectedTaskIds?.has(task.id)}
+                  onSelect={onSelectTask ? () => onSelectTask(task.id) : undefined}
                   onDragStart={() => setDraggedId(task.id)}
                   onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
                 />
@@ -823,12 +848,14 @@ function KanbanBoard({
 // ── List View ──────────────────────────────────────────────────────────────────
 
 function ListView({
-  tasks, profiles, onTaskClick, onAddTask,
+  tasks, profiles, onTaskClick, onAddTask, selectedTaskIds, onSelectTask,
 }: {
   tasks: Task[]
   profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
   onAddTask: (status: TaskStatus) => void
+  selectedTaskIds?: Set<string>
+  onSelectTask?: (id: string) => void
 }) {
   const [collapsed, setCollapsed] = useState<Record<TaskStatus, boolean>>({
     todo: false, in_progress: false, in_review: false, done: false,
@@ -871,12 +898,32 @@ function ListView({
                   const assignee = profiles.find(p => p.id === task.assigneeId)
                   const prio = PRIORITY_CONFIG[task.priority]
                   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
+                  const isSelected = selectedTaskIds?.has(task.id)
                   return (
                     <div
                       key={task.id}
                       onClick={() => onTaskClick(task)}
-                      className="flex items-center gap-3 px-4 py-2.5 bg-surface-0 hover:bg-white/[0.02] cursor-pointer group transition-colors"
+                      className={clsx(
+                        'flex items-center gap-3 px-4 py-2.5 bg-surface-0 hover:bg-white/[0.02] cursor-pointer group transition-colors',
+                        isSelected && 'bg-accent-blue/[0.05]',
+                      )}
                     >
+                      {/* Checkbox */}
+                      {onSelectTask && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); onSelectTask(task.id) }}
+                          className={clsx(
+                            'w-4 h-4 rounded border shrink-0 transition-all flex items-center justify-center',
+                            isSelected
+                              ? 'bg-accent-blue border-accent-blue'
+                              : 'border-zinc-600 bg-transparent opacity-0 group-hover:opacity-100',
+                          )}
+                        >
+                          {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
+                        </button>
+                      )}
+
                       {/* Priority indicator */}
                       <div className={clsx('w-[3px] h-5 rounded-full shrink-0', {
                         'bg-zinc-600':   task.priority === 'low',
@@ -910,11 +957,7 @@ function ListView({
 
                       {/* Assignee */}
                       {assignee ? (
-                        <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-semibold text-accent-blue">
-                            {(assignee.name ?? assignee.email).charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                        <UserAvatar profile={assignee} size="w-6 h-6" textSize="text-[10px]" className="shrink-0" />
                       ) : (
                         <div className="w-6 h-6 rounded-full border border-dashed border-zinc-700 shrink-0" />
                       )}
@@ -1095,11 +1138,7 @@ function AllTasksView({
 
                         {/* Assignee */}
                         {assignee ? (
-                          <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0" title={assignee.name ?? assignee.email}>
-                            <span className="text-[10px] font-semibold text-accent-blue">
-                              {(assignee.name ?? assignee.email).charAt(0).toUpperCase()}
-                            </span>
-                          </div>
+                          <UserAvatar profile={assignee} size="w-6 h-6" textSize="text-[10px]" className="shrink-0" />
                         ) : (
                           <div className="w-6 h-6 rounded-full border border-dashed border-zinc-700 shrink-0" />
                         )}
@@ -1192,9 +1231,7 @@ function ActivityRow({ activity }: { activity: ProjectActivity }) {
 
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-border-subtle/50 last:border-0">
-      <div className="w-6 h-6 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center shrink-0 mt-0.5">
-        <span className="text-[10px] font-bold text-accent-blue">{actor.charAt(0).toUpperCase()}</span>
-      </div>
+      <UserAvatar profile={{ email: activity.actorEmail }} size="w-6 h-6" textSize="text-[10px]" className="shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         <p className="text-sm text-text-secondary">
           <span className="text-text-primary font-medium">{actor}</span>
@@ -1215,9 +1252,10 @@ function ActivityRow({ activity }: { activity: ProjectActivity }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function Projects() {
-  usePageMeta('Projecten → Flits Impact', 'Beheer projecten en taken per klant in kanban of lijstweergave.')
   const clients = useStore(s => s.clients)
   const profile = useAuthStore(s => s.profile)
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const {
     projects, setProjects,
@@ -1247,6 +1285,13 @@ export function Projects() {
   const [showSprintModal, setShowSprintModal] = useState(false)
   const [editSprint, setEditSprint] = useState<Sprint | undefined>()
 
+  // Labels state
+  const [labels, setLabels] = useState<ProjectLabel[]>([])
+
+  // Filter & bulk selection state
+  const [filters, setFilters] = useState<TaskFilters>(EMPTY_FILTERS)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
+
   // Activity state
   const [activities, setActivities] = useState<ProjectActivity[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
@@ -1267,11 +1312,31 @@ export function Projects() {
   function openProject(project: Project) {
     setSelectedProject(project)
     loadProjectTasks(project.id)
-    // Load sprints for this project
+    // Load sprints and labels for this project
     projectsDb.fetchSprints(project.id).then(setSprints).catch(() => {})
+    projectsDb.fetchProjectLabels(project.id).then(setLabels).catch(() => {})
     setSelectedSprintId('all')
+    setFilters(EMPTY_FILTERS)
+    setSelectedTaskIds(new Set())
     setBoardView('kanban')
   }
+
+  // Restore navigation state when returning from TaskDetail
+  useEffect(() => {
+    const state = location.state as { projectId?: string; clientId?: string } | null
+    if (!state || projects.length === 0) return
+
+    if (state.projectId) {
+      const p = projects.find(x => x.id === state.projectId)
+      if (p) openProject(p)
+      // Clear state so back-navigating again doesn't re-open
+      navigate(location.pathname, { replace: true, state: null })
+    } else if (state.clientId) {
+      setLeftNav('projects')
+      setSelectedClientId(state.clientId)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, projects])
 
   const loadActivity = useCallback(async (projectId: string) => {
     setActivityLoading(true)
@@ -1335,6 +1400,76 @@ export function Projects() {
     }
   }
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as Element).tagName
+      const isTyping = ['INPUT', 'TEXTAREA'].includes(tag) || (e.target as Element).closest('[contenteditable]')
+      if (isTyping || e.metaKey || e.ctrlKey) return
+
+      if (!selectedProject) return
+
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true)
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault()
+        setBoardView('kanban')
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault()
+        setBoardView('list')
+      } else if (e.key === 'Escape') {
+        if (selectedTaskIds.size > 0) setSelectedTaskIds(new Set())
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [selectedProject, selectedTaskIds])
+
+  // Bulk actions
+  async function handleBulkStatus(status: TaskStatus) {
+    if (selectedTaskIds.size === 0) return
+    await Promise.all([...selectedTaskIds].map(id => projectsDb.saveTask({ id, status } as any)))
+    setTasks(prev => prev.map(t => selectedTaskIds.has(t.id) ? { ...t, status } : t))
+    setSelectedTaskIds(new Set())
+    toast.success(`${selectedTaskIds.size} taken bijgewerkt`)
+  }
+
+  async function handleBulkAssignee(assigneeId: string | null) {
+    if (selectedTaskIds.size === 0) return
+    await Promise.all([...selectedTaskIds].map(id => projectsDb.saveTask({ id, assigneeId } as any)))
+    setTasks(prev => prev.map(t => selectedTaskIds.has(t.id) ? { ...t, assigneeId } : t))
+    setSelectedTaskIds(new Set())
+    toast.success(`${selectedTaskIds.size} taken bijgewerkt`)
+  }
+
+  async function handleBulkSprint(sprintId: string | null) {
+    if (selectedTaskIds.size === 0) return
+    await Promise.all([...selectedTaskIds].map(id => projectsDb.saveTask({ id, sprintId } as any)))
+    setTasks(prev => prev.map(t => selectedTaskIds.has(t.id) ? { ...t, sprintId } : t))
+    setSelectedTaskIds(new Set())
+    toast.success(`${selectedTaskIds.size} taken bijgewerkt`)
+  }
+
+  async function handleBulkPriority(priority: TaskPriority) {
+    if (selectedTaskIds.size === 0) return
+    await Promise.all([...selectedTaskIds].map(id => projectsDb.saveTask({ id, priority } as any)))
+    setTasks(prev => prev.map(t => selectedTaskIds.has(t.id) ? { ...t, priority } : t))
+    setSelectedTaskIds(new Set())
+    toast.success(`${selectedTaskIds.size} taken bijgewerkt`)
+  }
+
+  async function handleBulkDelete() {
+    if (selectedTaskIds.size === 0) return
+    await Promise.all([...selectedTaskIds].map(id => projectsDb.deleteTask(id)))
+    setTasks(prev => prev.filter(t => !selectedTaskIds.has(t.id)))
+    if (selectedProject) {
+      setTaskCounts(prev => ({ ...prev, [selectedProject.id]: Math.max(0, (prev[selectedProject.id] ?? selectedTaskIds.size) - selectedTaskIds.size) }))
+    }
+    setSelectedTaskIds(new Set())
+    toast.success(`${selectedTaskIds.size} taken verwijderd`)
+  }
+
   // Filtered projects
   const filteredProjects = useMemo(() => {
     if (!selectedClientId) return projects
@@ -1352,10 +1487,22 @@ export function Projects() {
 
   // Sprint-filtered tasks
   const sprintFilteredTasks = useMemo(() => {
-    if (selectedSprintId === 'all') return tasks
-    if (selectedSprintId === '__none__') return tasks.filter(t => !(t as Task & { sprintId?: string }).sprintId)
-    return tasks.filter(t => (t as Task & { sprintId?: string }).sprintId === selectedSprintId)
-  }, [tasks, selectedSprintId])
+    let result = tasks
+    if (selectedSprintId !== 'all') {
+      if (selectedSprintId === '__none__') result = result.filter(t => !t.sprintId)
+      else result = result.filter(t => t.sprintId === selectedSprintId)
+    }
+    // Apply filter bar
+    if (filters.assigneeIds.length > 0) result = result.filter(t => t.assigneeId && filters.assigneeIds.includes(t.assigneeId))
+    if (filters.priorities.length > 0) result = result.filter(t => filters.priorities.includes(t.priority))
+    if (filters.labelIds.length > 0) result = result.filter(t => t.labelIds?.some(id => filters.labelIds.includes(id)))
+    if (filters.sprintId !== 'all') {
+      if (filters.sprintId === '__none__') result = result.filter(t => !t.sprintId)
+      else result = result.filter(t => t.sprintId === filters.sprintId)
+    }
+    if (filters.status !== 'all') result = result.filter(t => t.status === filters.status)
+    return result
+  }, [tasks, selectedSprintId, filters])
 
   if (selectedProject) {
     const client = clients.find(c => c.id === selectedProject.clientId)
@@ -1363,92 +1510,62 @@ export function Projects() {
     return (
       <div className="flex flex-col h-full">
         {/* Board header */}
-        <div className="flex items-center gap-2 px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle shrink-0 flex-wrap">
-          <button
-            onClick={() => { setSelectedProject(null); setTasks([]); setSprints([]) }}
-            className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors text-sm"
-          >
-            <ChevronLeft size={14} />
-            Projecten
-          </button>
-          <span className="text-text-muted text-sm">/</span>
-          <span className="text-sm text-text-muted hover:text-text-secondary cursor-default">{client?.companyName}</span>
-          <span className="text-text-muted text-sm">/</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color }} />
-            <span className="text-sm font-semibold text-text-primary">{selectedProject.name}</span>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2 flex-wrap">
-            {/* Sprint selector */}
-            {sprints.length > 0 && (
-              <select
-                value={selectedSprintId}
-                onChange={e => setSelectedSprintId(e.target.value)}
-                className="text-xs px-2 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-text-secondary hover:border-zinc-600 transition-colors focus:outline-none"
-              >
-                <option value="all">Alle sprints</option>
-                {sprints.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} {s.status === 'active' ? '(actief)' : ''}</option>
-                ))}
-                <option value="__none__">Geen sprint</option>
-              </select>
-            )}
-
-            {/* View toggle */}
-            <div className="flex items-center bg-surface-0 border border-border-subtle rounded-lg p-0.5">
-              <button
-                onClick={() => setBoardView('kanban')}
-                className={clsx(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
-                  boardView === 'kanban' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                )}
-              >
-                <LayoutGrid size={13} />
-                Board
-              </button>
-              <button
-                onClick={() => setBoardView('list')}
-                className={clsx(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
-                  boardView === 'list' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                )}
-              >
-                <List size={13} />
-                Lijst
-              </button>
-              <button
-                onClick={() => { setBoardView('activity'); loadActivity(selectedProject.id) }}
-                className={clsx(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors',
-                  boardView === 'activity' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                )}
-              >
-                <Activity size={13} />
-                Activiteit
-              </button>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setEditProject(selectedProject); setShowProjectModal(true) }}
-              className="h-7 text-xs"
-            >
-              Bewerken
-            </Button>
-            {boardView !== 'activity' && (
-              <Button
-                size="sm"
-                onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }}
-                className="h-7 text-xs gap-1.5"
-              >
-                <Plus size={13} />
-                Taak
+        <PageHeader
+          title={selectedProject.name}
+          breadcrumbs={[
+            { label: 'Projecten', onClick: () => { setSelectedProject(null); setTasks([]); setSprints([]); setLabels([]); setSelectedTaskIds(new Set()) } },
+            ...(client ? [{ label: client.companyName }] : []),
+            { label: selectedProject.name },
+          ]}
+          actions={
+            <>
+              <Button variant="outline" size="sm" onClick={() => { setEditSprint(undefined); setShowSprintModal(true) }} className="h-7 text-xs gap-1.5">
+                <Zap size={12} />Sprints
               </Button>
-            )}
-          </div>
-        </div>
+              {sprints.length > 0 && (
+                <select
+                  value={selectedSprintId}
+                  onChange={e => setSelectedSprintId(e.target.value)}
+                  className="text-xs px-2 py-1.5 bg-surface-0 border border-border-subtle rounded-lg text-text-secondary hover:border-zinc-600 transition-colors focus:outline-none"
+                >
+                  <option value="all">Alle sprints</option>
+                  {sprints.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} {s.status === 'active' ? '(actief)' : ''}</option>
+                  ))}
+                  <option value="__none__">Geen sprint</option>
+                </select>
+              )}
+              <div className="flex items-center bg-surface-0 border border-border-subtle rounded-lg p-0.5">
+                <button
+                  onClick={() => setBoardView('kanban')}
+                  className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors', boardView === 'kanban' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary')}
+                >
+                  <LayoutGrid size={13} />Board
+                </button>
+                <button
+                  onClick={() => setBoardView('list')}
+                  className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors', boardView === 'list' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary')}
+                >
+                  <List size={13} />Lijst
+                </button>
+                <button
+                  onClick={() => { setBoardView('activity'); loadActivity(selectedProject.id) }}
+                  className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors', boardView === 'activity' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary')}
+                >
+                  <Activity size={13} />Activiteit
+                </button>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => { setEditProject(selectedProject); setShowProjectModal(true) }} className="h-7 text-xs">
+                Bewerken
+              </Button>
+              {boardView !== 'activity' && (
+                <Button size="sm" onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }} className="h-7 text-xs gap-1.5">
+                  <Plus size={13} />Taak
+                </Button>
+              )}
+            </>
+          }
+        />
 
         {/* Sprint info bar */}
         {activeSprint && selectedSprintId === 'all' && (
@@ -1463,21 +1580,46 @@ export function Projects() {
           </div>
         )}
 
+        {/* Filter bar */}
+        {(profiles.length > 0 || labels.length > 0 || sprints.length > 0) && boardView !== 'activity' && (
+          <div className="px-4 lg:px-6 py-2 border-b border-border-subtle shrink-0">
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              profiles={profiles}
+              labels={labels}
+              sprints={sprints}
+            />
+          </div>
+        )}
+
         {/* Board / List / Activity */}
         <div className={clsx('flex-1 px-4 lg:px-6 pt-4 lg:pt-5', boardView === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
           {boardView === 'kanban' ? (
             <KanbanBoard
               tasks={sprintFilteredTasks}
               profiles={profiles}
-              onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
+              onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
               onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
               onStatusChange={handleStatusChange}
+              selectedTaskIds={selectedTaskIds}
+              onSelectTask={id => setSelectedTaskIds(prev => {
+                const next = new Set(prev)
+                next.has(id) ? next.delete(id) : next.add(id)
+                return next
+              })}
             />
           ) : boardView === 'list' ? (
             <ListView
               tasks={sprintFilteredTasks}
               profiles={profiles}
-              onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
+              onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
+              selectedTaskIds={selectedTaskIds}
+              onSelectTask={id => setSelectedTaskIds(prev => {
+                const next = new Set(prev)
+                next.has(id) ? next.delete(id) : next.add(id)
+                return next
+              })}
               onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
             />
           ) : (
@@ -1503,7 +1645,35 @@ export function Projects() {
           )}
         </div>
 
+        {/* Bulk action bar */}
+        <BulkActionBar
+          selectedCount={selectedTaskIds.size}
+          profiles={profiles}
+          sprints={sprints}
+          labels={labels}
+          onSetStatus={handleBulkStatus}
+          onSetAssignee={handleBulkAssignee}
+          onSetSprint={handleBulkSprint}
+          onSetPriority={handleBulkPriority}
+          onDelete={handleBulkDelete}
+          onClear={() => setSelectedTaskIds(new Set())}
+        />
+
         {/* Modals */}
+        <SprintModal
+          open={showSprintModal}
+          projectId={selectedProject.id}
+          sprint={editSprint ?? null}
+          onSave={(saved) => {
+            setSprints(prev => {
+              const idx = prev.findIndex(s => s.id === saved.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next }
+              return [...prev, saved]
+            })
+          }}
+          onDelete={(id) => setSprints(prev => prev.filter(s => s.id !== id))}
+          onClose={() => { setShowSprintModal(false); setEditSprint(undefined) }}
+        />
         {showProjectModal && (
           <ProjectModal
             project={editProject}
@@ -1644,12 +1814,10 @@ export function Projects() {
       <main className="flex-1 overflow-y-auto">
         {leftNav === 'overview' ? (
           <>
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
-              <div>
-                <h1 className="text-sm font-semibold text-text-primary">Alle taken</h1>
-                <p className="text-xs text-text-muted mt-0.5">{allTasks.length} taken over {projects.length} projecten</p>
-              </div>
-            </div>
+            <PageHeader
+              title="Alle taken"
+              subtitle={`${allTasks.length} taken over ${projects.length} projecten`}
+            />
             <div className="p-4 lg:p-5">
               {allTasksLoading ? (
                 <div className="flex justify-center py-16">
@@ -1662,26 +1830,24 @@ export function Projects() {
                   clients={clients}
                   profiles={profiles}
                   currentUserId={profile?.id}
-                  onTaskClick={task => { setEditTask(task); setShowTaskModal(true) }}
+                  onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
                 />
               )}
             </div>
           </>
         ) : (
           <>
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 lg:px-6 py-3 lg:py-[13px] border-b border-border-subtle bg-surface-0/80 backdrop-blur-md">
-              <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-text-primary truncate">
-                  {selectedClientId ? clients.find(c => c.id === selectedClientId)?.companyName : 'Projecten'}
-                </h1>
-                <p className="text-xs text-text-muted mt-0.5">{filteredProjects.length} projecten</p>
-              </div>
-              <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }} className="shrink-0">
-                <Plus size={13} />
-                <span className="hidden sm:inline">Nieuw project</span>
-                <span className="sm:hidden">Nieuw</span>
-              </Button>
-            </div>
+            <PageHeader
+              title={selectedClientId ? (clients.find(c => c.id === selectedClientId)?.companyName ?? 'Projecten') : 'Projecten'}
+              subtitle={`${filteredProjects.length} projecten`}
+              actions={
+                <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }}>
+                  <Plus size={13} />
+                  <span className="hidden sm:inline">Nieuw project</span>
+                  <span className="sm:hidden">Nieuw</span>
+                </Button>
+              }
+            />
 
             <div className="p-4 lg:p-6">
               {loading ? (

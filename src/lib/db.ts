@@ -217,7 +217,7 @@ export const clientInvoiceDb = {
 
 interface DbPost {
   id: string
-  client_id: string
+  client_id: string | null
   type: string
   status: string
   caption: string
@@ -231,7 +231,7 @@ interface DbPost {
 export function postFromRow(row: DbPost): Post {
   return {
     id: row.id,
-    clientId: row.client_id,
+    clientId: row.client_id ?? '',
     type: row.type as PostType,
     status: row.status as PostStatus,
     caption: row.caption ?? '',

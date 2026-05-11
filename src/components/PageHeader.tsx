@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 export interface BreadcrumbEntry {
   label: string
   href?: string
+  onClick?: () => void
 }
 
 interface PageHeaderProps {
@@ -66,10 +67,21 @@ export function PageHeader({
                           <BreadcrumbLink asChild>
                             <Link
                               to={crumb.href}
+                              onClick={crumb.onClick}
                               className="text-text-muted hover:text-text-secondary transition-colors"
                             >
                               {crumb.label}
                             </Link>
+                          </BreadcrumbLink>
+                        ) : crumb.onClick ? (
+                          <BreadcrumbLink asChild>
+                            <button
+                              type="button"
+                              onClick={crumb.onClick}
+                              className="text-text-muted hover:text-text-secondary transition-colors"
+                            >
+                              {crumb.label}
+                            </button>
                           </BreadcrumbLink>
                         ) : (
                           <BreadcrumbPage className="text-text-primary font-medium">
@@ -97,14 +109,25 @@ export function PageHeader({
                     <span key={i} className="contents">
                       {i > 0 && <BreadcrumbSeparator className="[&>svg]:size-3" />}
                       <BreadcrumbItem className={i === arr.length - 1 ? 'min-w-0' : ''}>
-                        {crumb.href && i !== arr.length - 1 ? (
+                        {(crumb.href || crumb.onClick) && i !== arr.length - 1 ? (
                           <BreadcrumbLink asChild>
-                            <Link
-                              to={crumb.href}
-                              className="text-text-muted hover:text-text-secondary transition-colors truncate"
-                            >
-                              {crumb.label}
-                            </Link>
+                            {crumb.href ? (
+                              <Link
+                                to={crumb.href}
+                                onClick={crumb.onClick}
+                                className="text-text-muted hover:text-text-secondary transition-colors truncate"
+                              >
+                                {crumb.label}
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={crumb.onClick}
+                                className="text-text-muted hover:text-text-secondary transition-colors truncate"
+                              >
+                                {crumb.label}
+                              </button>
+                            )}
                           </BreadcrumbLink>
                         ) : (
                           <BreadcrumbPage className="text-text-primary font-medium truncate">

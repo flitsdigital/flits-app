@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Accent theme tokens ────────────────────────────────────────────────────
+   Sets --accent-primary-rgb per theme. The @layer utilities block below then
+   overrides every accent-blue Tailwind class to use this variable so colours
+   change instantly without a build step.                                     */
+:root                  { --accent-primary-rgb: 76 110 245; }   /* blauw   */
+[data-accent="paars"]  { --accent-primary-rgb: 155 109 255; }  /* paars   */
+[data-accent="groen"]  { --accent-primary-rgb: 32 201 126; }   /* groen   */
+[data-accent="oranje"] { --accent-primary-rgb: 245 166 35; }   /* oranje  */
+[data-accent="roze"]   { --accent-primary-rgb: 236 72 153; }   /* roze    */
+[data-accent="rood"]   { --accent-primary-rgb: 229 72 77; }    /* rood    */
+[data-accent="cyaan"]  { --accent-primary-rgb: 34 211 238; }   /* cyaan   */
+
+/* ── accent-blue utility overrides ─────────────────────────────────────────
+   These live in @layer utilities so they have the same specificity as
+   Tailwind's generated classes and override them via source order.          */
+@layer utilities {
+  .text-accent-blue       { color: rgb(var(--accent-primary-rgb)); }
+  .text-accent-blue\/60   { color: rgb(var(--accent-primary-rgb) / 0.6); }
+  .bg-accent-blue         { background-color: rgb(var(--accent-primary-rgb)); }
+  .bg-accent-blue\/5      { background-color: rgb(var(--accent-primary-rgb) / 0.05); }
+  .bg-accent-blue\/10     { background-color: rgb(var(--accent-primary-rgb) / 0.1); }
+  .bg-accent-blue\/15     { background-color: rgb(var(--accent-primary-rgb) / 0.15); }
+  .bg-accent-blue\/20     { background-color: rgb(var(--accent-primary-rgb) / 0.2); }
+  .bg-accent-blue\/25     { background-color: rgb(var(--accent-primary-rgb) / 0.25); }
+  .bg-accent-blue\/50     { background-color: rgb(var(--accent-primary-rgb) / 0.5); }
+  .bg-accent-blue\/90     { background-color: rgb(var(--accent-primary-rgb) / 0.9); }
+  .border-accent-blue     { border-color: rgb(var(--accent-primary-rgb)); }
+  .border-accent-blue\/25 { border-color: rgb(var(--accent-primary-rgb) / 0.25); }
+  .border-accent-blue\/30 { border-color: rgb(var(--accent-primary-rgb) / 0.3); }
+  .border-accent-blue\/40 { border-color: rgb(var(--accent-primary-rgb) / 0.4); }
+  .border-accent-blue\/50 { border-color: rgb(var(--accent-primary-rgb) / 0.5); }
+  .border-accent-blue\/60 { border-color: rgb(var(--accent-primary-rgb) / 0.6); }
+  .ring-accent-blue\/20   { --tw-ring-color: rgb(var(--accent-primary-rgb) / 0.2); }
+  .ring-accent-blue\/30   { --tw-ring-color: rgb(var(--accent-primary-rgb) / 0.3); }
+  .ring-accent-blue\/40   { --tw-ring-color: rgb(var(--accent-primary-rgb) / 0.4); }
+}
+
 @layer base {
   :root {
     /* shadcn/ui — neutraal zwart-grijs (geen blauwe grijstint) */
