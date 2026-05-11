@@ -228,7 +228,7 @@ interface DbPost {
   updated_at: string
 }
 
-function postFromRow(row: DbPost): Post {
+export function postFromRow(row: DbPost): Post {
   return {
     id: row.id,
     clientId: row.client_id,
@@ -246,7 +246,7 @@ function postFromRow(row: DbPost): Post {
 function postToRow(post: Post): DbPost {
   return {
     id: post.id,
-    client_id: post.clientId,
+    client_id: post.clientId || null,
     type: post.type,
     status: post.status,
     caption: post.caption,

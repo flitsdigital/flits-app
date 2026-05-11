@@ -42,11 +42,35 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session) {
           const profile = await fetchProfileById(session.user.id)
-          set({ session, profile, loading: false })
+          if (profile) {
+            // Full update: session + fresh profile
+            set({ session, profile, loading: false })
+          } else {
+            // Profile fetch failed (e.g. during token refresh race) —
+            // update session but keep the existing profile so the UI
+            // doesn't blank out. It will correct itself on next load.
+            set((s) => ({ ...s, session, loading: false }))
+          }
         } else {
           set({ session: null, profile: null, loading: false })
         }
       })
+
+      // When the tab becomes visible again or the network comes back online,
+      // force a session refresh so a stale / expired JWT doesn't leave the
+      // app in a broken state that only a manual reload fixes.
+      const handleResume = () => {
+        // getSession() automatically refreshes an expired token — no
+        // separate refreshSession() call needed (that would compete for the lock).
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) set((s) => ({ ...s, session }))
+        }).catch(() => {})
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') handleResume()
+      })
+      window.addEventListener('online', handleResume)
     }
 
     // Hard safety net: never let `loading` stay true beyond ~14s, regardless
@@ -67,7 +91,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       }
       if (session) {
         const profile = await fetchProfileById(session.user.id)
-        set({ session, profile, loading: false })
+        set({ session, profile: profile ?? get().profile, loading: false })
       } else {
         set({ session: null, profile: null, loading: false })
       }

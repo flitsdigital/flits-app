@@ -146,7 +146,7 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
           const emails = parseMentions(note.trim(), allProfiles)
           for (const email of emails) {
             const target = allProfiles.find(p => p.email === email)
-            if (!target || target.email === profile.email) continue
+            if (!target) continue
             await notificationsDb.create({
               userId: target.id,
               actorEmail: profile.email,

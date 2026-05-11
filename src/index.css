@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    /* shadcn/ui CSS variables — dark theme mapped to existing design tokens */
-    --background: 240 5% 6%;          /* #0f0f11  ≈ surface-0 */
-    --foreground: 240 3% 94%;         /* #f0f0f2  = text-primary */
+    /* shadcn/ui — neutraal zwart-grijs (geen blauwe grijstint) */
+    --background: 0 0% 5%;
+    --foreground: 0 0% 93%;
 
-    --card: 240 5% 10%;               /* #18181c  ≈ surface-2 */
-    --card-foreground: 240 3% 94%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 93%;
 
-    --popover: 240 5% 12%;            /* #1c1c21  ≈ surface-2/3 */
-    --popover-foreground: 240 3% 94%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 93%;
 
-    --primary: 231 89% 64%;           /* #4c6ef5  = accent-blue */
+    --primary: 231 89% 64%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 16%;          /* #24242a  ≈ surface-3 */
-    --secondary-foreground: 240 3% 94%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 93%;
 
-    --muted: 240 5% 16%;
-    --muted-foreground: 240 4% 50%;   /* #7e7e88  ≈ text-secondary */
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 48%;
 
-    --accent: 240 5% 20%;             /* hover/highlight surface */
-    --accent-foreground: 240 3% 94%;
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 93%;
 
-    --destructive: 358 72% 59%;       /* #e5484d  = accent-red */
+    --destructive: 358 72% 59%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 4% 16%;             /* #24242a  ≈ border-subtle */
-    --input: 240 4% 16%;
-    --ring: 231 89% 64%;              /* = primary */
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 231 89% 64%;
 
     --radius: 0.375rem;
     --radius-sm: 0.25rem;
@@ -39,21 +39,19 @@
     --radius-lg: 0.5rem;
     --radius-xl: 0.75rem;
 
-    /* chart placeholders */
     --chart-1: 231 89% 64%;
     --chart-2: 152 72% 45%;
     --chart-3: 33 95% 55%;
     --chart-4: 270 72% 72%;
     --chart-5: 358 72% 59%;
 
-    /* sidebar */
-    --sidebar-background: 240 5% 8%;
-    --sidebar-foreground: 240 3% 94%;
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 93%;
     --sidebar-primary: 231 89% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 14%;
-    --sidebar-accent-foreground: 240 3% 94%;
-    --sidebar-border: 240 4% 14%;
+    --sidebar-accent: 0 0% 11%;
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 14%;
     --sidebar-ring: 231 89% 64%;
   }
 

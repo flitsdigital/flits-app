@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +26,7 @@ const PAGE_OPTIONS: { id: AppPage; label: string }[] = [
   { id: 'reiskosten', label: 'Reiskosten' },
   { id: 'projects', label: 'Projecten' },
   { id: 'leads', label: 'Leads' },
+  { id: 'time_tracking', label: 'Uren' },
 ]
 
 // ─── User modal ───────────────────────────────────────────────────────────────
@@ -123,6 +124,9 @@ function UserModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Account bewerken' : 'Nieuw account'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Wijzig gegevens, rol en paginatoegang van dit account.' : 'Maak een nieuw account aan met e-mail, wachtwoord en toegangsrechten.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -241,6 +245,9 @@ function DeleteConfirm({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Account verwijderen</DialogTitle>
+          <DialogDescription className="sr-only">
+            Bevestig het permanent verwijderen van dit gebruikersaccount.
+          </DialogDescription>
         </DialogHeader>
         <p className="text-xs text-muted-foreground -mt-2">
           Weet je zeker dat je <span className="text-foreground">{user?.email}</span> wil verwijderen?
@@ -279,9 +286,8 @@ export function Settings() {
   const [pwError, setPwError] = useState<string | null>(null)
   const [pwSuccess, setPwSuccess] = useState(false)
 
-  if (!isAdmin) return <Navigate to="/" replace />
-
   async function loadUsers() {
+    if (!isAdmin) return
     setUsersLoading(true)
     const { data } = await supabaseAdmin.from('profiles').select('*').order('created_at')
     setUsers(data ?? [])
@@ -289,8 +295,11 @@ export function Settings() {
   }
 
   useEffect(() => {
-    loadUsers()
-  }, [])
+    if (!isAdmin) return
+    void loadUsers()
+  }, [isAdmin])
+
+  if (!isAdmin) return <Navigate to="/" replace />
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault()

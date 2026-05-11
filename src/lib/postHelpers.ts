@@ -10,6 +10,7 @@ export function postStatusLabel(status: string): string {
     todo: 'Te doen',
     in_progress: 'Bezig',
     feedback: 'Klaar voor feedback',
+    approved: 'Goedgekeurd',
     posted: 'Gepost',
     // legacy
     planned: 'Te doen',
@@ -21,6 +22,7 @@ export const postStatusColor: Record<string, string> = {
   todo:        'bg-zinc-700/60 text-zinc-300 border-zinc-600/50',
   in_progress: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   feedback:    'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  approved:    'bg-purple-500/15 text-purple-400 border-purple-500/30',
   posted:      'bg-green-500/15 text-green-400 border-green-500/30',
   // legacy
   planned:     'bg-zinc-700/60 text-zinc-300 border-zinc-600/50',
@@ -30,6 +32,7 @@ export const postStatusDot: Record<string, string> = {
   todo:        'bg-zinc-400',
   in_progress: 'bg-orange-400',
   feedback:    'bg-blue-400',
+  approved:    'bg-purple-400',
   posted:      'bg-green-400',
   // legacy
   planned:     'bg-zinc-400',
@@ -37,9 +40,10 @@ export const postStatusDot: Record<string, string> = {
 
 // Chip-kleur voor kalender (bg + tekst + rand)
 export const postStatusChipColor: Record<string, { bg: string; text: string; border: string }> = {
-  todo:        { bg: 'bg-zinc-700/50',   text: 'text-zinc-300',   border: 'border-zinc-600/50' },
+  todo:        { bg: 'bg-zinc-700/50',    text: 'text-zinc-300',   border: 'border-zinc-600/50' },
   in_progress: { bg: 'bg-orange-500/20', text: 'text-orange-300', border: 'border-orange-500/35' },
   feedback:    { bg: 'bg-blue-500/20',   text: 'text-blue-300',   border: 'border-blue-500/35' },
+  approved:    { bg: 'bg-purple-500/20', text: 'text-purple-300', border: 'border-purple-500/35' },
   posted:      { bg: 'bg-green-500/20',  text: 'text-green-300',  border: 'border-green-500/35' },
   // legacy
   planned:     { bg: 'bg-zinc-700/50',   text: 'text-zinc-300',   border: 'border-zinc-600/50' },

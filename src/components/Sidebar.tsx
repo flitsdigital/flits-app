@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { filterNavForUser, SETTINGS_NAV, type NavEntry } from '../lib/nav'
+import { filterNavForUser, ALL_NAV, SETTINGS_NAV, type NavEntry } from '../lib/nav'
 
 function NavItem({
   to,
@@ -52,8 +52,12 @@ export function Sidebar({ className, onNavigate }: Props) {
   const { openCount } = useTodosData()
   const { unreadCount } = useNotifications()
 
+  const session = useAuthStore((s) => s.session)
   const isAdmin = profile?.role === 'admin'
-  const nav = filterNavForUser(profile)
+  // While the profile is still loading (session exists but profile not yet fetched),
+  // show the full nav instead of collapsing to an empty list. The correct filtered
+  // nav replaces it as soon as the profile arrives.
+  const nav = profile ? filterNavForUser(profile) : session ? ALL_NAV : []
 
   const initials = (profile?.name ?? profile?.email ?? 'U')
     .split(' ')

@@ -939,7 +939,7 @@ export function TravelExpenses() {
           {range.label} <ChevronDown size={11} />
         </button>
         {showPresets && (
-          <div className="absolute top-full mt-1 left-0 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[170px]">
+          <div className="absolute top-full mt-1 left-0 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-50 py-1 min-w-[170px]">
             {presets.map((p) => (
               <button key={p.label} type="button" onClick={() => { setRange(p.range); setAnchorDate(p.range.start); setShowPresets(false); if (p.label.includes('week') || p.label === 'Deze week' || p.label === 'Vorige week') setViewMode('week'); else setViewMode('month') }}
                 className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
@@ -975,7 +975,7 @@ export function TravelExpenses() {
           <Download size={12} /> Exporteren <ChevronDown size={11} />
         </button>
         {showExport && (
-          <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-30 py-1 min-w-[150px]">
+          <div className="absolute right-0 top-full mt-1 bg-surface-2 border border-border-default rounded-lg shadow-dropdown z-50 py-1 min-w-[150px]">
             <button type="button" onClick={() => { exportCSV(filtered, clients, users, rangeLabel); setShowExport(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] transition-colors">
               <Sheet size={12} className="text-accent-green" /> CSV exporteren
             </button>
@@ -993,9 +993,9 @@ export function TravelExpenses() {
         <CalendarDays size={12} /> {selectMode ? 'Klaar' : 'Datums selecteren'}
       </button>
       {!selectMode && (
-        <button type="button" onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-accent-blue/90 text-white text-xs font-medium rounded transition-colors">
+        <Button size="sm" onClick={() => setShowAdd(true)} className="h-7 text-xs gap-1.5">
           <Plus size={12} /> Rit toevoegen
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -1205,12 +1205,12 @@ export function TravelExpenses() {
           <button onClick={() => setSelectedDates(new Set())} className="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 shrink-0">
             <X size={12} /> <span className="hidden sm:inline">Deselecteer</span>
           </button>
-          <button
+          <Button
             onClick={() => setShowBulk(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs lg:text-sm font-medium rounded-xl transition-colors shrink-0"
+            className="text-xs lg:text-sm gap-1.5 shrink-0"
           >
             <Plus size={14} /> <span className="hidden sm:inline">Rit toevoegen voor alle</span><span className="sm:hidden">Toevoegen</span>
-          </button>
+          </Button>
         </div>
       )}
 

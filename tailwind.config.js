@@ -6,16 +6,16 @@ export default {
   	extend: {
   		colors: {
   			surface: {
-  				'0': '#0c0c0e',
-  				'1': '#111114',
-  				'2': '#18181c',
-  				'3': '#1f1f24',
-  				'4': '#27272d'
+  				'0': '#080808',
+  				'1': '#0d0d0d',
+  				'2': '#141414',
+  				'3': '#1a1a1a',
+  				'4': '#222222'
   			},
   			border: {
-  				subtle: '#1e1e24',
-  				default: '#2e2e36',
-  				strong: '#3f3f48'
+  				subtle: '#161616',
+  				default: '#2a2a2a',
+  				strong: '#3a3a3a'
   			},
   			text: {
   				primary: '#f0f0f2',

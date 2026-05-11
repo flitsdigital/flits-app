@@ -192,6 +192,14 @@ export const projectsDb = {
     return (data as DbProject[] ?? []).map(mapProject)
   },
 
+  async fetchProjectsForClient(clientId: string): Promise<Project[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('projects').select('*').eq('client_id', clientId).order('created_at', { ascending: false })
+    )
+    if (error) throw error
+    return (data as DbProject[] ?? []).map(mapProject)
+  },
+
   async fetchTaskRefs(): Promise<Array<{ id: string; projectId: string }>> {
     const { data, error } = await withTimeout(
       supabaseAdmin.from('tasks').select('id, project_id').order('created_at')

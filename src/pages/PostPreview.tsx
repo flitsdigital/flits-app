@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, ChevronLeft, ChevronRight, Check, ThumbsUp } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,7 @@ interface PreviewPost {
   media_urls?: string[] | null
   date: string | null
   type: string
+  status: string
 }
 
 export function PostPreview() {
@@ -22,6 +23,8 @@ export function PostPreview() {
   const [post, setPost] = useState<PreviewPost | null>(null)
   const [clientName, setClientName] = useState('Klant')
   const [activeSlide, setActiveSlide] = useState(0)
+  const [approving, setApproving] = useState(false)
+  const [approved, setApproved] = useState(false)
   const carouselRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -32,7 +35,7 @@ export function PostPreview() {
       try {
         const { data: postData, error: postError } = await supabase
           .from('posts')
-          .select('id, client_id, caption, media_url, media_urls, date, type')
+          .select('id, client_id, caption, media_url, media_urls, date, type, status')
           .eq('id', postId)
           .single()
 
@@ -42,6 +45,7 @@ export function PostPreview() {
 
         setPost(postData as PreviewPost)
         setActiveSlide(0)
+        setApproved((postData as PreviewPost).status === 'approved')
 
         const { data: clientData } = await supabase
           .from('clients')
@@ -100,6 +104,23 @@ export function PostPreview() {
     setActiveSlide(bounded)
   }
 
+  async function handleApprove() {
+    if (!post || approved || approving) return
+    setApproving(true)
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({ status: 'approved' })
+        .eq('id', post.id)
+      if (error) throw error
+      setApproved(true)
+    } catch (e) {
+      console.error('Goedkeuren mislukt:', e)
+    } finally {
+      setApproving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-0 flex items-center justify-center">
@@ -131,22 +152,39 @@ export function PostPreview() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 py-10 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-5">
-          <p className="text-xs uppercase tracking-wider text-text-muted">Content preview</p>
-          <h1 className="text-base font-semibold text-text-primary mt-1">Voorstel voor {clientName}</h1>
+    <div className="min-h-screen bg-surface-0">
+      {/* Top bar */}
+      <div className="border-b border-border-subtle bg-surface-1/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-text-muted uppercase tracking-wider">Content preview</p>
+            <p className="text-sm font-medium text-text-primary mt-0.5">Voorstel voor {clientName}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {approved ? (
+              <div className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
+                <Check size={14} />
+                Goedgekeurd
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={approving}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-500 hover:bg-green-400 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <ThumbsUp size={14} />
+                {approving ? 'Bezig…' : 'Goedkeuren'}
+              </button>
+            )}
+          </div>
         </div>
+      </div>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
-          <aside className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-            <p className="text-xs text-text-muted mb-3">Caption van deze post:</p>
-            <p className="text-sm text-text-secondary whitespace-pre-line break-words">
-              {post.caption || 'Geen caption toegevoegd.'}
-            </p>
-          </aside>
-
-          <div className="max-w-xl w-full mx-auto bg-surface-2 border border-border-subtle rounded-xl overflow-hidden shadow-xl">
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
+          {/* Instagram mock — left on desktop */}
+          <div className="max-w-xl w-full mx-auto lg:mx-0 bg-surface-2 border border-border-subtle rounded-xl overflow-hidden shadow-lg">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent-blue/20 flex items-center justify-center">
@@ -174,11 +212,11 @@ export function PostPreview() {
                 }}
               >
                 {mediaUrls.map((url, index) => (
-                  <div key={`${url}-${index}`} className="w-full shrink-0 snap-center flex items-center justify-center max-h-[75vh]">
+                  <div key={`${url}-${index}`} className="w-full shrink-0 snap-center flex items-center justify-center max-h-[70vh]">
                     <img
                       src={url}
                       alt={`Preview ${index + 1} voor ${clientName}`}
-                      className="w-full h-auto max-h-[75vh] object-contain"
+                      className="w-full h-auto max-h-[70vh] object-contain"
                     />
                   </div>
                 ))}
@@ -236,6 +274,51 @@ export function PostPreview() {
                 <p className="text-xs text-text-muted mt-3 uppercase tracking-wide">{dateLabel}</p>
               )}
             </div>
+          </div>
+
+          {/* Sidebar — right on desktop */}
+          <div className="space-y-4">
+            <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Caption</p>
+              <p className="text-sm text-text-secondary whitespace-pre-line break-words leading-relaxed">
+                {post.caption || 'Geen caption toegevoegd.'}
+              </p>
+            </div>
+
+            <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Details</p>
+              <div className="space-y-3">
+                {dateLabel && (
+                  <div>
+                    <p className="text-xs text-text-muted">Geplande datum</p>
+                    <p className="text-sm text-text-primary mt-0.5 capitalize">{dateLabel}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-text-muted">Type</p>
+                  <p className="text-sm text-text-primary mt-0.5 capitalize">{post.type}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Status</p>
+                  <p className={`text-sm mt-0.5 font-medium ${approved ? 'text-green-400' : 'text-amber-400'}`}>
+                    {approved ? 'Goedgekeurd' : 'Wacht op goedkeuring'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Approve CTA (mobile) — only shown when not yet approved */}
+            {!approved && (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={approving}
+                className="lg:hidden w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-400 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                <ThumbsUp size={15} />
+                {approving ? 'Bezig…' : 'Post goedkeuren'}
+              </button>
+            )}
           </div>
         </div>
       </div>

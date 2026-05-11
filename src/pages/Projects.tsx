@@ -327,7 +327,7 @@ function TaskModal({
       const emails = parseMentions(newComment.trim(), allProfiles)
       for (const email of emails) {
         const target = allProfiles.find(p => p.email === email)
-        if (!target || target.email === modalProfile.email) continue
+        if (!target) continue
         await notificationsDb.create({
           userId: target.id,
           actorEmail: modalProfile.email,
@@ -1429,20 +1429,23 @@ export function Projects() {
               </button>
             </div>
 
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => { setEditProject(selectedProject); setShowProjectModal(true) }}
-              className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary border border-border-subtle hover:border-zinc-600 rounded-lg transition-colors"
+              className="h-7 text-xs"
             >
               Bewerken
-            </button>
+            </Button>
             {boardView !== 'activity' && (
-              <button
+              <Button
+                size="sm"
                 onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
+                className="h-7 text-xs gap-1.5"
               >
                 <Plus size={13} />
                 Taak
-              </button>
+              </Button>
             )}
           </div>
         </div>

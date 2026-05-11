@@ -53,6 +53,7 @@ import {
   Circle,
   CircleDot,
   MessageSquare,
+  CheckCheck,
   CheckCircle2,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
@@ -94,10 +95,11 @@ const POST_KANBAN_COLS: {
   ring: string;
   text: string;
 }[] = [
-  { id: "todo", label: "Te doen", Icon: Circle, bg: "bg-zinc-500/[0.06]", headerBg: "bg-zinc-500/10", ring: "bg-zinc-400", text: "text-zinc-400" },
-  { id: "in_progress", label: "Bezig", Icon: CircleDot, bg: "bg-orange-500/[0.06]", headerBg: "bg-orange-500/10", ring: "bg-orange-400", text: "text-orange-400" },
-  { id: "feedback", label: "Feedback", Icon: MessageSquare, bg: "bg-blue-500/[0.06]", headerBg: "bg-blue-500/10", ring: "bg-blue-400", text: "text-blue-400" },
-  { id: "posted", label: "Gepost", Icon: CheckCircle2, bg: "bg-green-500/[0.05]", headerBg: "bg-green-500/10", ring: "bg-green-400", text: "text-green-400" },
+  { id: "todo",        label: "Te doen",     Icon: Circle,       bg: "bg-zinc-500/[0.06]",   headerBg: "bg-zinc-500/10",   ring: "bg-zinc-400",   text: "text-zinc-400" },
+  { id: "in_progress", label: "Bezig",       Icon: CircleDot,    bg: "bg-orange-500/[0.06]", headerBg: "bg-orange-500/10", ring: "bg-orange-400", text: "text-orange-400" },
+  { id: "feedback",    label: "Feedback",    Icon: MessageSquare, bg: "bg-blue-500/[0.06]",   headerBg: "bg-blue-500/10",   ring: "bg-blue-400",   text: "text-blue-400" },
+  { id: "approved",    label: "Goedgekeurd", Icon: CheckCheck,   bg: "bg-purple-500/[0.06]", headerBg: "bg-purple-500/10", ring: "bg-purple-400", text: "text-purple-400" },
+  { id: "posted",      label: "Gepost",      Icon: CheckCircle2, bg: "bg-green-500/[0.05]",  headerBg: "bg-green-500/10",  ring: "bg-green-400",  text: "text-green-400" },
 ];
 
 function PostKanbanCard({
@@ -119,10 +121,11 @@ function PostKanbanCard({
   const st = normalizePostStatus(post.status);
   const sc = postStatusChipColor[st] ?? postStatusChipColor.todo;
   const bar: Record<PostStatus, string> = {
-    todo: "border-l-zinc-500",
+    todo:        "border-l-zinc-500",
     in_progress: "border-l-orange-500",
-    feedback: "border-l-blue-500",
-    posted: "border-l-green-500",
+    feedback:    "border-l-blue-500",
+    approved:    "border-l-purple-500",
+    posted:      "border-l-green-500",
   };
   return (
     <div
@@ -179,7 +182,7 @@ function ContentKanbanBoard({
   const [dragOverStatus, setDragOverStatus] = useState<PostStatus | null>(null);
 
   const byStatus = useMemo(() => {
-    const map: Record<PostStatus, Post[]> = { todo: [], in_progress: [], feedback: [], posted: [] };
+    const map: Record<PostStatus, Post[]> = { todo: [], in_progress: [], feedback: [], approved: [], posted: [] };
     for (const p of posts) {
       const st = normalizePostStatus(p.status);
       (map[st] ?? map.todo).push(p);
@@ -772,7 +775,7 @@ export function Content() {
     setPostFormOpen(true);
   }
   const formClientId =
-    filterClientId !== "all" ? filterClientId : (clients[0]?.id ?? "");
+    filterClientId !== "all" ? filterClientId : "";
   const stats =
     viewMode === "month" ? monthStats : weekStats;
 
@@ -851,10 +854,11 @@ export function Content() {
     const primaryMediaUrl = post.mediaUrls?.[0] ?? post.mediaUrl;
     const mediaCount = post.mediaUrls?.length ?? (post.mediaUrl ? 1 : 0);
     const statusBar: Record<PostStatus, string> = {
-      todo: 'border-l-zinc-500',
+      todo:        'border-l-zinc-500',
       in_progress: 'border-l-orange-500',
-      feedback: 'border-l-blue-500',
-      posted: 'border-l-green-500',
+      feedback:    'border-l-blue-500',
+      approved:    'border-l-purple-500',
+      posted:      'border-l-green-500',
     }
     return (
       <div
@@ -1398,7 +1402,7 @@ export function Content() {
             </button>
             {bulkStatusOpen && (
               <div className="absolute bottom-full mb-2 left-0 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl overflow-hidden min-w-[180px]">
-                {(['todo', 'in_progress', 'feedback', 'posted'] as const).map(s => (
+                {(['todo', 'in_progress', 'feedback', 'approved', 'posted'] as const).map(s => (
                   <button
                     key={s}
                     onClick={async () => {

@@ -4,7 +4,7 @@ import { nl } from 'date-fns/locale'
 import {
   Image, Video, Film, Square, Layers, Upload, Loader2,
   ExternalLink, GripVertical, Share2, Copy, Trash2, X, Bold,
-  Circle, CircleDot, Eye, CheckCircle2,
+  Circle, CircleDot, Eye, CheckCheck, CheckCircle2,
 } from 'lucide-react'
 import type { Post, PostType, PostStatus, Client } from '../types'
 import { supabase } from '../lib/supabase'
@@ -35,10 +35,11 @@ const POST_TYPES: { value: PostType; label: string; icon: React.ElementType }[] 
 ]
 
 const POST_STATUSES: { value: PostStatus; label: string; Icon: React.ElementType; color: string }[] = [
-  { value: 'todo',        label: 'Te doen',             Icon: Circle,       color: 'text-zinc-400' },
-  { value: 'in_progress', label: 'Bezig',               Icon: CircleDot,    color: 'text-orange-400' },
-  { value: 'feedback',    label: 'Klaar voor feedback', Icon: Eye,          color: 'text-blue-400' },
-  { value: 'posted',      label: 'Gepost',              Icon: CheckCircle2, color: 'text-green-400' },
+  { value: 'todo',        label: 'Te doen',              Icon: Circle,       color: 'text-zinc-400' },
+  { value: 'in_progress', label: 'Bezig',                Icon: CircleDot,    color: 'text-orange-400' },
+  { value: 'feedback',    label: 'Klaar voor feedback',  Icon: Eye,          color: 'text-blue-400' },
+  { value: 'approved',    label: 'Goedgekeurd',          Icon: CheckCheck,   color: 'text-purple-400' },
+  { value: 'posted',      label: 'Gepost',               Icon: CheckCircle2, color: 'text-green-400' },
 ]
 
 const NONE_CLIENT = '__none__'
@@ -365,7 +366,7 @@ export function PostForm({
       open={open}
       onOpenChange={(v) => !v && onClose()}
       direction="right"
-      // vaul drawers don't use Radix FocusScope — Popovers work natively
+    // vaul drawers don't use Radix FocusScope — Popovers work natively
     >
       <DrawerContent className="inset-y-0 right-0 left-auto mt-0 h-full w-full sm:w-[500px] rounded-none border-l sm:rounded-l-xl flex flex-col [&>div:first-child]:hidden outline-none">
         <DrawerTitle className="sr-only">
@@ -420,198 +421,198 @@ export function PostForm({
 
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
 
-            {/* Title */}
-            <div className="px-5 pt-4 pb-2 shrink-0">
-              <h2 className="text-base font-medium text-foreground">
-                {initial?.id ? 'Post bewerken' : 'Nieuwe post maken'}
-              </h2>
-            </div>
+          {/* Title */}
+          <div className="px-5 pt-4 pb-2 shrink-0">
+            <h2 className="text-base font-medium text-foreground">
+              {initial?.id ? 'Post bewerken' : 'Nieuwe post maken'}
+            </h2>
+          </div>
 
-            {/* Metadata row — status, client, type, date */}
-            <div className="px-5 pb-3 flex items-center gap-1.5 flex-wrap shrink-0">
+          {/* Metadata row — status, client, type, date */}
+          <div className="px-5 pb-3 flex items-center gap-1.5 flex-wrap shrink-0">
 
-              {/* Status */}
-              <PillDropdown
-                options={POST_STATUSES.map(s => s.value)}
-                value={form.status}
-                onChange={(v) => set('status', v as PostStatus)}
-                renderLabel={(v) => {
-                  const s = POST_STATUSES.find(x => x.value === v)!
-                  return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
-                }}
-                renderOption={(v) => {
-                  const s = POST_STATUSES.find(x => x.value === v)!
-                  return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
-                }}
+            {/* Status */}
+            <PillDropdown
+              options={POST_STATUSES.map(s => s.value)}
+              value={form.status}
+              onChange={(v) => set('status', v as PostStatus)}
+              renderLabel={(v) => {
+                const s = POST_STATUSES.find(x => x.value === v)!
+                return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
+              }}
+              renderOption={(v) => {
+                const s = POST_STATUSES.find(x => x.value === v)!
+                return <><s.Icon size={12} className={cn('shrink-0', s.color)} /><span>{s.label}</span></>
+              }}
+            />
+
+            {/* Client */}
+            {clients.length > 0 && (
+              <PostClientSelect
+                value={form.clientId}
+                onChange={(v) => set('clientId', v)}
+                clients={clients}
+                disabled={lockClient}
               />
+            )}
 
-              {/* Client */}
-              {clients.length > 0 && (
-                <PostClientSelect
-                  value={form.clientId}
-                  onChange={(v) => set('clientId', v)}
-                  clients={clients}
-                  disabled={lockClient}
+            {/* Type */}
+            <PillDropdown
+              options={POST_TYPES.map(t => t.value)}
+              value={form.type}
+              onChange={(v) => set('type', v as PostType)}
+              renderLabel={(v) => {
+                const t = POST_TYPES.find(x => x.value === v)!
+                const Icon = t.icon
+                return <><Icon className="size-3 shrink-0" /><span>{t.label}</span></>
+              }}
+              renderOption={(v) => {
+                const t = POST_TYPES.find(x => x.value === v)!
+                const Icon = t.icon
+                return <><Icon className="size-3 shrink-0 text-muted-foreground" /><span>{t.label}</span></>
+              }}
+            />
+
+            {/* Date */}
+            <DatePickerButton
+              value={form.date}
+              onChange={(v) => set('date', v)}
+            />
+
+          </div>
+
+          {/* Photo upload */}
+          <div className="px-5 pt-3 pb-3 border-b border-border shrink-0">
+            {(form.mediaUrls?.length ?? 0) === 0 ? (
+              <label className={cn(
+                'w-full flex flex-col items-center justify-center gap-2 bg-muted/30 border border-border rounded-lg py-8 transition-colors',
+                uploading
+                  ? 'text-muted-foreground'
+                  : 'text-muted-foreground hover:text-foreground cursor-pointer'
+              )}>
+                {uploading
+                  ? <Loader2 className="size-5 animate-spin" />
+                  : <Upload className="size-5" />}
+                <span className="text-sm">
+                  {uploading ? 'Uploaden...' : 'Voeg foto(s) toe'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple={form.type === 'carousel'}
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={uploading}
                 />
-              )}
-
-              {/* Type */}
-              <PillDropdown
-                options={POST_TYPES.map(t => t.value)}
-                value={form.type}
-                onChange={(v) => set('type', v as PostType)}
-                renderLabel={(v) => {
-                  const t = POST_TYPES.find(x => x.value === v)!
-                  const Icon = t.icon
-                  return <><Icon className="size-3 shrink-0" /><span>{t.label}</span></>
-                }}
-                renderOption={(v) => {
-                  const t = POST_TYPES.find(x => x.value === v)!
-                  const Icon = t.icon
-                  return <><Icon className="size-3 shrink-0 text-muted-foreground" /><span>{t.label}</span></>
-                }}
-              />
-
-              {/* Date */}
-              <DatePickerButton
-                value={form.date}
-                onChange={(v) => set('date', v)}
-              />
-
-            </div>
-
-            {/* Photo upload */}
-            <div className="px-5 pt-3 pb-3 border-b border-border shrink-0">
-              {(form.mediaUrls?.length ?? 0) === 0 ? (
-                <label className={cn(
-                  'w-full flex flex-col items-center justify-center gap-2 bg-muted/30 border border-border rounded-lg py-8 transition-colors',
-                  uploading
-                    ? 'text-muted-foreground'
-                    : 'text-muted-foreground hover:text-foreground cursor-pointer'
-                )}>
-                  {uploading
-                    ? <Loader2 className="size-5 animate-spin" />
-                    : <Upload className="size-5" />}
-                  <span className="text-sm">
-                    {uploading ? 'Uploaden...' : 'Voeg foto(s) toe'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple={form.type === 'carousel'}
-                    className="hidden"
-                    onChange={handleFileChange}
-                    disabled={uploading}
-                  />
-                </label>
-              ) : (
-                <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
-                  {form.type === 'carousel' ? (
-                    <div className="p-2 space-y-2">
-                      {form.mediaUrls?.map((url, index) => (
-                        <div
-                          key={`${url}-${index}`}
-                          draggable
-                          onDragStart={() => setDragIndex(index)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => {
-                            if (dragIndex !== null) {
-                              moveMedia(dragIndex, index)
-                              setDragIndex(null)
-                            }
-                          }}
-                          onDragEnd={() => setDragIndex(null)}
-                          className="flex items-center gap-2 rounded border border-border bg-muted/30 p-2"
-                        >
-                          <GripVertical className="size-3 text-muted-foreground shrink-0 cursor-grab" />
-                          <img
-                            src={url}
-                            alt={`Slide ${index + 1}`}
-                            className="size-10 object-cover rounded shrink-0"
-                          />
-                          <span className="text-xs text-muted-foreground flex-1">
-                            Slide {index + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeMediaAt(index)}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      ))}
-                      <label className="flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
-                        <Upload className="size-3" />
-                        Meer toevoegen
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={handleFileChange}
+              </label>
+            ) : (
+              <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+                {form.type === 'carousel' ? (
+                  <div className="p-2 space-y-2">
+                    {form.mediaUrls?.map((url, index) => (
+                      <div
+                        key={`${url}-${index}`}
+                        draggable
+                        onDragStart={() => setDragIndex(index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (dragIndex !== null) {
+                            moveMedia(dragIndex, index)
+                            setDragIndex(null)
+                          }
+                        }}
+                        onDragEnd={() => setDragIndex(null)}
+                        className="flex items-center gap-2 rounded border border-border bg-muted/30 p-2"
+                      >
+                        <GripVertical className="size-3 text-muted-foreground shrink-0 cursor-grab" />
+                        <img
+                          src={url}
+                          alt={`Slide ${index + 1}`}
+                          className="size-10 object-cover rounded shrink-0"
                         />
-                      </label>
-                    </div>
-                  ) : (
-                    <>
-                      <img
-                        src={form.mediaUrls?.[0]}
-                        alt="Preview"
-                        className="w-full max-h-64 object-contain bg-background"
-                      />
-                      <div className="flex items-center justify-between px-3 py-2 border-t border-border">
-                        <a
-                          href={form.mediaUrls?.[0]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                        >
-                          <ExternalLink className="size-2.5" /> Open
-                        </a>
+                        <span className="text-xs text-muted-foreground flex-1">
+                          Slide {index + 1}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => setForm(p => ({ ...p, mediaUrl: undefined, mediaUrls: [] }))}
-                          className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                          onClick={() => removeMediaAt(index)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
                         >
-                          Verwijder
+                          <X className="size-3" />
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              )}
-              {uploading && uploadProgress > 0 && (
-                <div className="mt-2">
-                  <Progress value={uploadProgress} className="h-1" />
-                </div>
-              )}
-              {uploadError && (
-                <p className="text-xs text-destructive mt-2">{uploadError}</p>
-              )}
-            </div>
-
-            {/* Caption — grows to fill remaining space */}
-            <div className="relative flex-1 min-h-0 flex flex-col px-5 pt-3 pb-1">
-              <Textarea
-                ref={captionRef}
-                placeholder="Begin hier met het schrijven van de caption..."
-                value={form.caption}
-                onChange={(e) => set('caption', e.target.value)}
-                className="flex-1 min-h-0 pr-10 bg-transparent border-none shadow-none outline-none text-sm text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:border-none focus:text-foreground resize-none leading-relaxed overflow-y-auto"
-              />
-              {/* Bold toolbar — pinned top-right of caption area */}
-              <div className="absolute top-5 right-8">
-                <button
-                  type="button"
-                  onClick={applyBoldToSelection}
-                  title="Vet (Unicode bold)"
-                  className="bg-background border border-border flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                >
-                  <Bold className="size-3" />
-                </button>
+                    ))}
+                    <label className="flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                      <Upload className="size-3" />
+                      Meer toevoegen
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      src={form.mediaUrls?.[0]}
+                      alt="Preview"
+                      className="w-full max-h-64 object-contain bg-background"
+                    />
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                      <a
+                        href={form.mediaUrls?.[0]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      >
+                        <ExternalLink className="size-2.5" /> Open
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, mediaUrl: undefined, mediaUrls: [] }))}
+                        className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        Verwijder
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
+            )}
+            {uploading && uploadProgress > 0 && (
+              <div className="mt-2">
+                <Progress value={uploadProgress} className="h-1" />
+              </div>
+            )}
+            {uploadError && (
+              <p className="text-xs text-destructive mt-2">{uploadError}</p>
+            )}
+          </div>
+
+          {/* Caption — grows to fill remaining space */}
+          <div className="relative flex-1 min-h-0 flex flex-col px-5 pt-3 pb-1">
+            <Textarea
+              ref={captionRef}
+              placeholder="Begin hier met het schrijven van de caption..."
+              value={form.caption}
+              onChange={(e) => set('caption', e.target.value)}
+              className="flex-1 min-h-0 pr-10 bg-transparent border-none shadow-none outline-none text-sm text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:border-none focus:text-foreground resize-none leading-relaxed overflow-y-auto"
+            />
+            {/* Bold toolbar — pinned top-right of caption area */}
+            <div className="absolute top-5 right-8">
+              <button
+                type="button"
+                onClick={applyBoldToSelection}
+                title="Vet (Unicode bold)"
+                className="bg-background border border-border flex items-center justify-center size-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <Bold className="size-3" />
+              </button>
             </div>
+          </div>
 
           {/* Footer */}
           <div className="border-t border-border px-4 py-3 flex items-center justify-between shrink-0">

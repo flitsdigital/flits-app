@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'default'
-export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects' | 'leads'
+export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects' | 'leads' | 'time_tracking'
 
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +31,26 @@ export interface ContactMoment {
   actorId?: string
   actorEmail?: string
   createdAt: string
+}
+
+export interface TimeTag {
+  id: string
+  name: string
+  color: string
+  createdAt: string
+}
+
+export interface TimeEntry {
+  id: string
+  userId: string
+  clientId: string | null   // optioneel
+  description: string
+  startedAt: string         // ISO timestamptz
+  endedAt: string | null    // null = lopende timer
+  isRunning: boolean
+  tagIds: string[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface TravelExpense {
@@ -118,7 +138,7 @@ export interface Client {
 }
 
 export type PostType = 'foto' | 'video' | 'reel' | 'story' | 'carousel'
-export type PostStatus = 'todo' | 'in_progress' | 'feedback' | 'posted'
+export type PostStatus = 'todo' | 'in_progress' | 'feedback' | 'approved' | 'posted'
 export type PostLogAction = 'created' | 'status_changed' | 'updated' | 'deleted'
 
 export interface PostLog {

@@ -21,19 +21,27 @@ interface MentionTextareaProps {
   autoFocus?: boolean
 }
 
-// Parse @mentions from text, return matched profile emails
+// Parse @mentions from text, return matched profile emails.
+// Sorts by name length descending so "Jordi Test" is matched before "Jordi".
 export function parseMentions(text: string, profiles: Profile[]): string[] {
-  const regex = /@(\S+)/g
   const found: string[] = []
-  let m: RegExpExecArray | null
-  while ((m = regex.exec(text)) !== null) {
-    const token = m[1].toLowerCase()
-    const match = profiles.find((p) => {
-      const name = (p.name ?? p.email.split('@')[0]).toLowerCase()
-      return name === token || p.email.toLowerCase() === token
-    })
-    if (match && !found.includes(match.email)) {
-      found.push(match.email)
+  // Longest name first to prevent short names from consuming part of a longer mention
+  const sorted = [...profiles].sort((a, b) => {
+    const aLen = (a.name ?? a.email.split('@')[0]).length
+    const bLen = (b.name ?? b.email.split('@')[0]).length
+    return bLen - aLen
+  })
+  let remaining = text
+  for (const p of sorted) {
+    const name = p.name ?? p.email.split('@')[0]
+    const escapeName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const escapeEmail = p.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Match @Name or @email followed by whitespace or end-of-string
+    const pattern = new RegExp(`@(?:${escapeName}|${escapeEmail})(?=\\s|$)`, 'gi')
+    if (pattern.test(remaining) && !found.includes(p.email)) {
+      found.push(p.email)
+      // Remove matched mention so shorter names don't re-match the same token
+      remaining = remaining.replace(pattern, '')
     }
   }
   return found

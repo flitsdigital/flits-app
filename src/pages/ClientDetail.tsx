@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,13 @@ import {
   ExternalLink,
   Share2,
   Check,
+  FolderKanban,
+  ArrowRight,
 } from "lucide-react";
 import { parseISO, format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { useStore } from "../store/useStore";
+import { projectsDb } from "../lib/projectsDb";
 import { formatDate, formatWeek, formatWeekDate, formatCycle } from "../lib/billing";
 import { StatusBadge } from "../components/StatusBadge";
 import { InvoiceBadge } from "../components/InvoiceBadge";
@@ -39,7 +42,7 @@ import {
   postStatusLabel,
   postStatusColor,
 } from "../lib/postHelpers";
-import type { Client, Post, PostType, ClientType } from "../types";
+import type { Client, Post, PostType, ClientType, Project } from "../types";
 import { useClientStatsForClient } from "../hooks/useClientStats";
 
 const TYPE_ICON: Record<PostType, React.ElementType> = {
@@ -89,9 +92,31 @@ export function ClientDetail() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
   const [tab, setTab] = useState("overview");
+  const [clientProjects, setClientProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectTaskCounts, setProjectTaskCounts] = useState<Record<string, number>>({});
 
   const client = getClient(id ?? "");
   const stats = useClientStatsForClient(client);
+
+  useEffect(() => {
+    if (!client) return
+    setProjectsLoading(true)
+    projectsDb.fetchProjectsForClient(client.id)
+      .then(async (projects) => {
+        setClientProjects(projects)
+        const counts: Record<string, number> = {}
+        await Promise.all(
+          projects.map(async (p) => {
+            const tasks = await projectsDb.fetchProjectTasks(p.id)
+            counts[p.id] = tasks.length
+          })
+        )
+        setProjectTaskCounts(counts)
+      })
+      .catch(console.error)
+      .finally(() => setProjectsLoading(false))
+  }, [client?.id])
 
   if (!client) {
     return (
@@ -231,6 +256,15 @@ export function ClientDetail() {
             <TabsTrigger value="content" className="text-xs shrink-0">
               Content
             </TabsTrigger>
+            <TabsTrigger value="projects" className="text-xs shrink-0 gap-1.5">
+              <FolderKanban size={12} />
+              Projecten
+              {clientProjects.length > 0 && (
+                <span className="ml-0.5 text-[10px] bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md text-text-muted font-normal">
+                  {clientProjects.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-0">
@@ -350,17 +384,17 @@ export function ClientDetail() {
                     {clientPosts.length} posts
                   </span>
                 </h2>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   onClick={() => {
                     setEditingPost(null);
                     setPostFormOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-accent-blue hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
+                  className="h-7 text-xs gap-1.5"
                 >
                   <Plus size={13} />
                   Post toevoegen
-                </button>
+                </Button>
               </div>
 
               {clientPosts.length === 0 && (
@@ -445,6 +479,76 @@ export function ClientDetail() {
                   );
                 })}
               </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="projects" className="mt-0">
+            <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
+                <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                  Projecten
+                  {clientProjects.length > 0 && (
+                    <span className="ml-2 text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md font-normal normal-case tracking-normal">
+                      {clientProjects.length}
+                    </span>
+                  )}
+                </h2>
+                <Link
+                  to="/projects"
+                  className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors"
+                >
+                  Alle projecten
+                  <ArrowRight size={11} />
+                </Link>
+              </div>
+
+              {projectsLoading && (
+                <div className="px-4 py-8 text-center text-xs text-text-muted">Laden…</div>
+              )}
+
+              {!projectsLoading && clientProjects.length === 0 && (
+                <div className="px-4 py-8 text-center text-xs text-text-muted">
+                  Geen projecten gekoppeld aan deze klant.
+                </div>
+              )}
+
+              {!projectsLoading && clientProjects.length > 0 && (
+                <div className="divide-y divide-border-subtle">
+                  {clientProjects.map((project) => {
+                    const taskCount = projectTaskCounts[project.id] ?? 0
+                    const statusConfig = {
+                      active:    { label: 'Actief',     cls: 'text-green-400 bg-green-500/10 border-green-500/25' },
+                      paused:    { label: 'Gepauzeerd', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25' },
+                      completed: { label: 'Afgerond',   cls: 'text-zinc-400  bg-zinc-500/10  border-zinc-500/25' },
+                    }[project.status]
+                    return (
+                      <div
+                        key={project.id}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
+                      >
+                        <div
+                          className="w-2.5 h-2.5 rounded-sm shrink-0"
+                          style={{ backgroundColor: project.color ?? '#3b82f6' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-text-primary truncate">{project.name}</p>
+                          {project.description && (
+                            <p className="text-xs text-text-muted truncate mt-0.5">{project.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-text-muted tabular-nums">
+                            {taskCount} {taskCount === 1 ? 'taak' : 'taken'}
+                          </span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${statusConfig.cls}`}>
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

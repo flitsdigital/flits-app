@@ -130,7 +130,7 @@ export function PageHeader({
         </div>
 
         {actions && (
-          <div className="flex items-center gap-1.5 flex-wrap lg:flex-nowrap overflow-x-auto scrollbar-none -mx-1 px-1">
+          <div className="flex items-center gap-1.5 flex-wrap lg:flex-nowrap overflow-x-auto overflow-y-visible lg:overflow-visible scrollbar-none -mx-1 px-1">
             {actions}
           </div>
         )}

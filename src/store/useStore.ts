@@ -41,6 +41,7 @@ interface StoreState {
   addPostsBulk: (posts: PostInput[]) => Promise<Post[]>
   updatePost: (id: string, data: Partial<Post>) => Promise<void>
   deletePost: (id: string) => Promise<void>
+  applyRemotePost: (type: 'insert' | 'update' | 'delete', post: Post | null, id?: string) => void
 }
 
 export const useStore = create<StoreState>()((set, get) => ({
@@ -242,6 +243,24 @@ export const useStore = create<StoreState>()((set, get) => ({
     })
     set((s) => ({ posts: s.posts.filter((p) => p.id !== id) }))
     await postDb.delete(id)
+  },
+
+  applyRemotePost: (type, post, id) => {
+    set((s) => {
+      if (type === 'delete') {
+        const removeId = id ?? post?.id
+        if (!removeId) return s
+        return { posts: s.posts.filter((p) => p.id !== removeId) }
+      }
+      if (!post) return s
+      if (type === 'insert') {
+        // Skip als de post al aanwezig is (optimistic insert van eigen client)
+        if (s.posts.some((p) => p.id === post.id)) return s
+        return { posts: [post, ...s.posts] }
+      }
+      // update
+      return { posts: s.posts.map((p) => (p.id === post.id ? post : p)) }
+    })
   },
 
   toggleInvoiced: async (clientId, date) => {

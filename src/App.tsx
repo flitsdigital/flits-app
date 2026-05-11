@@ -14,20 +14,25 @@ import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
 import { Settings } from './pages/Settings'
 import { TravelExpenses } from './pages/TravelExpenses'
+import { TimeTracking } from './pages/TimeTracking'
 import { Projects } from './pages/Projects'
 import { Leads } from './pages/Leads'
 import { LeadDetail } from './pages/LeadDetail'
+import { ScrollToTop } from './components/ScrollToTop'
 import { TodoSheet } from './components/TodoSheet'
 import { InboxSheet } from './components/InboxSheet'
 import { GlobalSearchDialog } from './components/GlobalSearchDialog'
 import { useAuthStore } from './store/useAuthStore'
 import { useStore } from './store/useStore'
 import { useUIStore } from './store/useUIStore'
+import { useRealtimeSync } from './hooks/useRealtimeSync'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
   const session = useAuthStore((s) => s.session)
   const fetchClients = useStore((s) => s.fetchClients)
+
+  useRealtimeSync()
 
   useEffect(() => {
     initialize()
@@ -36,6 +41,22 @@ export default function App() {
   useEffect(() => {
     if (session) fetchClients()
   }, [session])
+
+  // Re-fetch core data when the tab becomes visible or network comes back.
+  // This prevents stale/empty state after the browser paused the tab.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible' && session) {
+        fetchClients()
+      }
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('online', refresh)
+    }
+  }, [session, fetchClients])
 
   // Global T shortcut to toggle todo panel
   useEffect(() => {
@@ -51,6 +72,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -81,6 +103,10 @@ export default function App() {
 
             <Route element={<ProtectedRoute page="reiskosten" />}>
               <Route path="reiskosten" element={<TravelExpenses />} />
+            </Route>
+
+            <Route element={<ProtectedRoute page="time_tracking" />}>
+              <Route path="uren" element={<TimeTracking />} />
             </Route>
 
             <Route element={<ProtectedRoute page="projects" />}>

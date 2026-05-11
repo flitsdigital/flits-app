@@ -6,6 +6,7 @@ import {
   Car,
   Kanban,
   UserPlus,
+  Clock,
   Settings,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,9 +26,10 @@ export const ALL_NAV: NavEntry[] = [
   { to: '/clients',    label: 'Klanten',    icon: Users,           exact: false, page: 'clients'   },
   { to: '/timeline',   label: 'Timeline',   icon: GanttChart,      exact: false, page: 'timeline'  },
   { to: '/content',    label: 'Content',    icon: CalendarDays,    exact: false, page: 'content'   },
-  { to: '/reiskosten', label: 'Reiskosten', icon: Car,             exact: false, page: 'reiskosten'},
-  { to: '/projects',   label: 'Projecten',  icon: Kanban,          exact: false, page: 'projects'  },
-  { to: '/leads',      label: 'Leads',      icon: UserPlus,        exact: false, page: 'leads'     },
+  { to: '/reiskosten',    label: 'Reiskosten', icon: Car,      exact: false, page: 'reiskosten'    },
+  { to: '/uren',          label: 'Uren',       icon: Clock,    exact: false, page: 'time_tracking' },
+  { to: '/projects',      label: 'Projecten',  icon: Kanban,   exact: false, page: 'projects'      },
+  { to: '/leads',         label: 'Leads',      icon: UserPlus, exact: false, page: 'leads'         },
 ]
 
 export const SETTINGS_NAV: NavEntry = {
