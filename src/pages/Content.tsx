@@ -780,7 +780,11 @@ export function Content() {
     viewMode === "month" ? monthStats : weekStats;
 
   async function copyPreviewLink(postId: string) {
-    const link = `${window.location.origin}/preview/${postId}`;
+    // Use the Supabase Edge Function URL so social platforms (WhatsApp, Telegram)
+    // get proper Open Graph tags (post image + client name).
+    // The edge function redirects real browsers back to the React app.
+    const ogBase = import.meta.env.VITE_SUPABASE_URL as string
+    const link = `${ogBase}/functions/v1/preview-og/${postId}`;
     try {
       await navigator.clipboard.writeText(link);
       setCopiedPostId(postId);
