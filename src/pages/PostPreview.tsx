@@ -265,8 +265,8 @@ export function PostPreview() {
                 <Bookmark size={18} className="text-text-primary" />
               </div>
 
-              <p className="text-sm text-text-secondary whitespace-pre-line break-words">
-                <span className="font-medium text-text-primary mr-1">{clientName}</span>
+              <p className="text-sm text-white whitespace-pre-line break-words">
+                <span className="font-medium text-white mr-1">{clientName}</span>
                 {post.caption || 'Geen caption toegevoegd.'}
               </p>
 
@@ -280,7 +280,7 @@ export function PostPreview() {
           <div className="space-y-4">
             <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
               <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Caption</p>
-              <p className="text-sm text-text-secondary whitespace-pre-line break-words leading-relaxed">
+              <p className="text-sm text-white whitespace-pre-line break-words leading-relaxed">
                 {post.caption || 'Geen caption toegevoegd.'}
               </p>
             </div>
