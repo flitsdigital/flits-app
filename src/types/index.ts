@@ -22,6 +22,16 @@ export interface Lead {
   updatedAt: string
 }
 
+export interface LeadAttachment {
+  id: string
+  leadId: string
+  fileName: string
+  fileSize?: number
+  storagePath: string
+  uploadedBy?: string
+  createdAt: string
+}
+
 export interface ContactMoment {
   id: string
   leadId: string

@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase, withTimeout } from '../lib/supabase'
 import type { UserProfile } from '../types'
 
+const PROFILE_CACHE_KEY = 'flits-cached-profile'
+
 interface AuthStore {
   session: Session | null
   profile: UserProfile | null
@@ -20,7 +22,44 @@ async function fetchProfileById(userId: string): Promise<UserProfile | null> {
       12_000,
     )
     if (error) return null
-    return (data as UserProfile) ?? null
+    const profile = (data as UserProfile) ?? null
+    // Cache for instant next load
+    if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
+    return profile
+  } catch {
+    return null
+  }
+}
+
+/** Read cached profile synchronously from localStorage — no network needed. */
+function getCachedProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as UserProfile) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Check if Supabase has a non-expired session stored locally.
+ * Supabase stores sessions under keys matching `sb-*-auth-token`.
+ * If found and not expired we can skip the loading spinner entirely.
+ */
+function getLocalSession(): Session | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith('sb-') || !key.endsWith('-auth-token')) continue
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+      const parsed = JSON.parse(raw) as Session & { expires_at?: number }
+      // Keep 60s buffer to account for clock skew
+      if (!parsed.expires_at || parsed.expires_at * 1000 > Date.now() + 60_000) {
+        return parsed
+      }
+    }
+    return null
   } catch {
     return null
   }
@@ -31,10 +70,15 @@ async function fetchProfileById(userId: string): Promise<UserProfile | null> {
  *  login never updates this store (infinite spinner on `/`). */
 let authListenerRegistered = false
 
+// Read from cache synchronously so the initial state is already hydrated.
+const cachedSession = getLocalSession()
+const cachedProfile = cachedSession ? getCachedProfile() : null
+
 export const useAuthStore = create<AuthStore>()((set, get) => ({
-  session: null,
-  profile: null,
-  loading: true,
+  // If we have a valid cached session, start non-loading immediately.
+  session: cachedSession,
+  profile: cachedProfile,
+  loading: !cachedSession, // only show spinner on first-ever load
 
   initialize: async () => {
     if (!authListenerRegistered) {
@@ -43,12 +87,8 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         if (session) {
           const profile = await fetchProfileById(session.user.id)
           if (profile) {
-            // Full update: session + fresh profile
             set({ session, profile, loading: false })
           } else {
-            // Profile fetch failed (e.g. during token refresh race) —
-            // update session but keep the existing profile so the UI
-            // doesn't blank out. It will correct itself on next load.
             set((s) => ({ ...s, session, loading: false }))
           }
         } else {
@@ -56,12 +96,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         }
       })
 
-      // When the tab becomes visible again or the network comes back online,
-      // force a session refresh so a stale / expired JWT doesn't leave the
-      // app in a broken state that only a manual reload fixes.
       const handleResume = () => {
-        // getSession() automatically refreshes an expired token — no
-        // separate refreshSession() call needed (that would compete for the lock).
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session) set((s) => ({ ...s, session }))
         }).catch(() => {})
@@ -73,31 +108,37 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       window.addEventListener('online', handleResume)
     }
 
-    // Hard safety net: never let `loading` stay true beyond ~14s, regardless
-    // of what supabase-internals do. Worst case the user is briefly logged
-    // out and gets redirected to /login instead of staring at a spinner.
+    // Safety net: cap the spinner at 8s (reduced from 14s)
     const safety = setTimeout(() => {
-      const s = useAuthStore.getState()
-      if (s.loading) {
+      if (useAuthStore.getState().loading) {
         console.warn('auth init safety timeout — forcing loading=false')
         set({ loading: false })
       }
-    }, 14_000)
+    }, 8_000)
 
     try {
-      const { data: { session }, error } = await withTimeout(supabase.auth.getSession(), 12_000)
-      if (error) {
-        console.warn('getSession error', error.message)
-      }
+      const { data: { session }, error } = await withTimeout(supabase.auth.getSession(), 8_000)
+      if (error) console.warn('getSession error', error.message)
+
       if (session) {
-        const profile = await fetchProfileById(session.user.id)
-        set({ session, profile: profile ?? get().profile, loading: false })
+        // Refresh profile in background — don't block if we already have a cached one
+        const hasCached = !!get().profile
+        if (hasCached) {
+          // Show immediately, refresh profile silently
+          set({ session, loading: false })
+          fetchProfileById(session.user.id).then((profile) => {
+            if (profile) set((s) => ({ ...s, profile }))
+          })
+        } else {
+          const profile = await fetchProfileById(session.user.id)
+          set({ session, profile: profile ?? get().profile, loading: false })
+        }
       } else {
+        // No valid session — clear cache and send to login
+        localStorage.removeItem(PROFILE_CACHE_KEY)
         set({ session: null, profile: null, loading: false })
       }
     } catch (err) {
-      // Time-out or netwerkfout: spinner niet eindeloos laten hangen.
-      // `onAuthStateChange` kan daarna alsnog INITIAL_SESSION / SIGNED_IN afleveren.
       console.warn('auth initialize timeout', err)
       set((s) => (s.loading ? { ...s, loading: false } : s))
     } finally {
@@ -112,6 +153,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut()
+    localStorage.removeItem(PROFILE_CACHE_KEY)
     set({ session: null, profile: null })
   },
 

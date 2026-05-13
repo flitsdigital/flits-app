@@ -1,5 +1,5 @@
 import { supabase, withTimeout } from './supabase'
-import type { Lead, ContactMoment, LeadStatus, ContactMomentType } from '../types'
+import type { Lead, ContactMoment, LeadStatus, ContactMomentType, LeadAttachment } from '../types'
 
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
@@ -154,5 +154,67 @@ export const leadsDb = {
       supabase.from('contact_moments').delete().eq('id', id)
     )
     if (error) throw error
+  },
+
+  // ── Attachments ──────────────────────────────────────────────────────────────
+
+  async fetchAttachments(leadId: string): Promise<LeadAttachment[]> {
+    const { data, error } = await withTimeout(
+      supabase.from('lead_attachments').select('*').eq('lead_id', leadId).order('created_at', { ascending: false })
+    )
+    if (error) throw error
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      leadId: row.lead_id as string,
+      fileName: row.file_name as string,
+      fileSize: row.file_size as number | undefined,
+      storagePath: row.storage_path as string,
+      uploadedBy: row.uploaded_by as string | undefined,
+      createdAt: row.created_at as string,
+    }))
+  },
+
+  async uploadAttachment(leadId: string, file: File, userId?: string): Promise<LeadAttachment> {
+    const ext = file.name.split('.').pop() ?? 'pdf'
+    const path = `${leadId}/${crypto.randomUUID()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('lead-attachments')
+      .upload(path, file, { contentType: file.type, upsert: false })
+    if (uploadError) throw uploadError
+
+    const { data, error } = await withTimeout(
+      supabase.from('lead_attachments').insert({
+        lead_id: leadId,
+        file_name: file.name,
+        file_size: file.size,
+        storage_path: path,
+        uploaded_by: userId ?? null,
+      }).select().single()
+    )
+    if (error) throw error
+    const row = data as Record<string, unknown>
+    return {
+      id: row.id as string,
+      leadId: row.lead_id as string,
+      fileName: row.file_name as string,
+      fileSize: row.file_size as number | undefined,
+      storagePath: row.storage_path as string,
+      uploadedBy: row.uploaded_by as string | undefined,
+      createdAt: row.created_at as string,
+    }
+  },
+
+  async deleteAttachment(id: string, storagePath: string): Promise<void> {
+    await supabase.storage.from('lead-attachments').remove([storagePath])
+    const { error } = await withTimeout(
+      supabase.from('lead_attachments').delete().eq('id', id)
+    )
+    if (error) throw error
+  },
+
+  getAttachmentUrl(storagePath: string): string {
+    const { data } = supabase.storage.from('lead-attachments').getPublicUrl(storagePath)
+    return data.publicUrl
   },
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Trash2, Phone, Mail, Globe, Users, MessageSquare, Calendar, ArrowRight, ChevronDown } from 'lucide-react'
+import { Trash2, Phone, Mail, Globe, Users, MessageSquare, Calendar, ArrowRight, ChevronDown, Paperclip, Upload, FileText, X, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -15,7 +15,8 @@ import { usePageMeta } from '../hooks/usePageMeta'
 import { LEAD_STATUS_CONFIG } from './Leads'
 import { notificationsDb } from '../lib/notificationsDb'
 import { projectsDb } from '../lib/projectsDb'
-import type { Lead, LeadStatus, ContactMomentType, Client } from '../types'
+import { leadsDb } from '../lib/leadsDb'
+import type { Lead, LeadStatus, ContactMomentType, Client, LeadAttachment } from '../types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -229,6 +230,138 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
   )
 }
 
+// ── Attachments ───────────────────────────────────────────────────────────────
+
+function LeadAttachments({ leadId, userId }: { leadId: string; userId?: string }) {
+  const [attachments, setAttachments] = useState<LeadAttachment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    leadsDb.fetchAttachments(leadId).then(setAttachments).finally(() => setLoading(false))
+  }, [leadId])
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const pdfs = Array.from(files).filter(f => f.type === 'application/pdf')
+    if (pdfs.length === 0) { toast.error('Alleen PDF-bestanden zijn toegestaan'); return }
+
+    setUploading(true)
+    try {
+      const uploaded = await Promise.all(pdfs.map(f => leadsDb.uploadAttachment(leadId, f, userId)))
+      setAttachments(prev => [...uploaded, ...prev])
+      toast.success(`${uploaded.length} bestand${uploaded.length > 1 ? 'en' : ''} geüpload`)
+    } catch (e) {
+      toast.error('Upload mislukt', { description: String(e) })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleDelete(a: LeadAttachment) {
+    if (!window.confirm(`"${a.fileName}" verwijderen?`)) return
+    try {
+      await leadsDb.deleteAttachment(a.id, a.storagePath)
+      setAttachments(prev => prev.filter(x => x.id !== a.id))
+    } catch (e) {
+      toast.error('Verwijderen mislukt', { description: String(e) })
+    }
+  }
+
+  function formatSize(bytes?: number) {
+    if (!bytes) return ''
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="bg-surface-2 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+          <Paperclip size={12} />
+          Bijlagen
+        </span>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors disabled:opacity-50"
+        >
+          <Upload size={12} />
+          {uploading ? 'Bezig...' : 'PDF uploaden'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf"
+          multiple
+          className="hidden"
+          onChange={e => handleFiles(e.target.files)}
+        />
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+        onClick={() => attachments.length === 0 && inputRef.current?.click()}
+        className={cn(
+          'border-2 border-dashed rounded-lg transition-colors',
+          dragging ? 'border-accent-blue/60 bg-accent-blue/5' : 'border-border-subtle',
+          attachments.length === 0 ? 'py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-zinc-600' : 'hidden',
+        )}
+      >
+        <Upload size={18} className="text-text-muted" />
+        <p className="text-xs text-text-muted">Sleep PDF's hierheen of klik om te uploaden</p>
+      </div>
+
+      {/* File list */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map(i => <div key={i} className="h-10 bg-surface-3 rounded-lg animate-pulse" />)}
+        </div>
+      ) : (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+          className={cn('space-y-1.5', dragging && attachments.length > 0 && 'ring-2 ring-accent-blue/30 rounded-lg p-1')}
+        >
+          {attachments.map(a => (
+            <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 bg-surface-3 rounded-lg group">
+              <FileText size={14} className="text-red-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-text-primary truncate">{a.fileName}</p>
+                {a.fileSize && <p className="text-[10px] text-text-muted">{formatSize(a.fileSize)}</p>}
+              </div>
+              <a
+                href={leadsDb.getAttachmentUrl(a.storagePath)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1 text-text-muted hover:text-text-secondary transition-colors"
+                title="Downloaden"
+              >
+                <Download size={13} />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleDelete(a)}
+                className="p-1 text-text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                title="Verwijderen"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Contact log timeline ──────────────────────────────────────────────────────
 
 function ContactLog({ leadId, onLastContactUpdate }: {
@@ -311,6 +444,7 @@ export function LeadDetail() {
   const navigate = useNavigate()
   const { leads, loading, updateLead, updateLeadStatus, deleteLead } = useLeadsData()
   const { addClient, addClientInvoice } = useStore()
+  const profile = useAuthStore((s) => s.profile)
 
   const [showEditForm, setShowEditForm] = useState(false)
   const [showClientForm, setShowClientForm] = useState(false)
@@ -446,6 +580,9 @@ export function LeadDetail() {
                 className="text-sm"
               />
             </div>
+
+            {/* Attachments */}
+            <LeadAttachments leadId={lead.id} userId={profile?.id} />
 
             {/* Convert to client */}
             {lead.status === 'won' && (
