@@ -194,11 +194,25 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
 export interface Project {
   id: string
-  clientId: string
+  clientId: string | null
   name: string
   description?: string | null
   status: ProjectStatus
   color: string
+  startDate?: string | null
+  deadline?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Milestone {
+  id: string
+  projectId: string
+  name: string
+  deadline?: string | null
+  description?: string | null
+  color: string
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }
@@ -206,11 +220,13 @@ export interface Project {
 export interface Task {
   id: string
   projectId: string
+  milestoneId?: string | null
   title: string
   description?: string | null
   status: TaskStatus
   priority: TaskPriority
   assigneeId?: string | null
+  startDate?: string | null
   dueDate?: string | null
   sprintId?: string | null
   labelIds?: string[]

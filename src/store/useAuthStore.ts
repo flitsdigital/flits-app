@@ -42,9 +42,15 @@ function getCachedProfile(): UserProfile | null {
 }
 
 /**
- * Check if Supabase has a non-expired session stored locally.
+ * Check if Supabase has ANY session stored locally — expired or not.
  * Supabase stores sessions under keys matching `sb-*-auth-token`.
- * If found and not expired we can skip the loading spinner entirely.
+ * We intentionally ignore expiry here: if a token is expired, Supabase will
+ * refresh it automatically via the refresh_token when `getSession()` is
+ * called. Skipping an expired token causes the store to start with
+ * loading=true and forces a network round-trip on every cold start
+ * (e.g. opening the browser in the morning after the 1h access-token
+ * lifetime). Returning it instead lets the UI render immediately while
+ * the token refresh happens silently in the background.
  */
 function getLocalSession(): Session | null {
   try {
@@ -53,11 +59,9 @@ function getLocalSession(): Session | null {
       if (!key?.startsWith('sb-') || !key.endsWith('-auth-token')) continue
       const raw = localStorage.getItem(key)
       if (!raw) continue
-      const parsed = JSON.parse(raw) as Session & { expires_at?: number }
-      // Keep 60s buffer to account for clock skew
-      if (!parsed.expires_at || parsed.expires_at * 1000 > Date.now() + 60_000) {
-        return parsed
-      }
+      const parsed = JSON.parse(raw) as Session
+      // Any stored session with an access_token is good enough to render
+      if (parsed.access_token) return parsed
     }
     return null
   } catch {

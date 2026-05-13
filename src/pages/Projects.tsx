@@ -4,7 +4,7 @@ import {
   Plus, ChevronLeft, X, Trash2, Check, Flag,
   Folder, Circle, CircleDot, Eye, CheckCircle2,
   LayoutGrid, List, ChevronDown, ChevronsUpDown,
-  MessageSquare, Activity, Send, Zap,
+  MessageSquare, Activity, Send, Zap, GanttChartSquare, CalendarRange,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -19,7 +19,7 @@ import { errorMessage } from '../lib/errors'
 import { parseMentions } from '../components/MentionTextarea'
 import { MentionTextarea } from '../components/MentionTextarea'
 import clsx from 'clsx'
-import type { Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus, ProjectLabel } from '../types'
+import type { Milestone, Project, Task, Subtask, TaskStatus, TaskPriority, ProjectStatus, ProjectLabel } from '../types'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +37,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { SprintModal } from '../components/projects/SprintModal'
 import { FilterBar, TaskFilters, EMPTY_FILTERS, hasActiveFilters } from '../components/projects/FilterBar'
 import { BulkActionBar } from '../components/projects/BulkActionBar'
+import { GanttView } from '../components/projects/GanttView'
+import { ProjectsTimeline } from '../components/projects/ProjectsTimeline'
+import { MilestoneModal } from '../components/projects/MilestoneModal'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +80,7 @@ function ProjectClientCombobox({ value, onChange, clients }: { value: string; on
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-sm">
-          {selected ? selected.companyName : <span className="text-muted-foreground">Selecteer klant...</span>}
+          {selected ? selected.companyName : <span className="text-muted-foreground">Geen klant (intern)</span>}
           <ChevronsUpDown size={14} className="text-muted-foreground shrink-0" />
         </Button>
       </PopoverTrigger>
@@ -87,6 +90,10 @@ function ProjectClientCombobox({ value, onChange, clients }: { value: string; on
           <CommandList>
             <CommandEmpty>Geen klant gevonden.</CommandEmpty>
             <CommandGroup>
+              <CommandItem value="__none__" onSelect={() => { onChange(''); setOpen(false) }}>
+                <Check size={14} className={cn('mr-2', !value ? 'opacity-100' : 'opacity-0')} />
+                <span className="text-text-muted">Geen klant (intern)</span>
+              </CommandItem>
               {clients.map(c => (
                 <CommandItem key={c.id} value={c.companyName} onSelect={() => { onChange(c.id); setOpen(false) }}>
                   <Check size={14} className={cn('mr-2', value === c.id ? 'opacity-100' : 'opacity-0')} />
@@ -135,22 +142,26 @@ function ProjectModal({
   const [description, setDescription] = useState(project?.description ?? '')
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'active')
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0])
+  const [startDate, setStartDate] = useState(project?.startDate ?? '')
+  const [deadline, setDeadline] = useState(project?.deadline ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !selectedClient) return
+    if (!name.trim()) return
     setLoading(true); setError(null)
     try {
       const saved = await projectsDb.saveProject({
         id: project?.id,
-        clientId: selectedClient,
+        clientId: selectedClient || null,
         name: name.trim(),
         description: description.trim() || null,
         status,
         color,
+        startDate: startDate || null,
+        deadline: deadline || null,
       })
       toast.success(isEdit ? 'Project opgeslagen' : 'Project aangemaakt')
       onSaved(saved)
@@ -223,6 +234,18 @@ function ProjectModal({
             </div>
           )}
 
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Startdatum</Label>
+              <DatePickerButton value={startDate || undefined} onChange={v => setStartDate(v ?? '')} placeholder="Kies datum" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Deadline</Label>
+              <DatePickerButton value={deadline || undefined} onChange={v => setDeadline(v ?? '')} placeholder="Kies datum" />
+            </div>
+          </div>
+
           {/* Color */}
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-2">Kleur</label>
@@ -255,7 +278,7 @@ function ProjectModal({
             )}
             <div className="flex gap-2 ml-auto">
               <Button type="button" variant="outline" onClick={onClose}>Annuleren</Button>
-              <Button type="submit" disabled={loading || !name.trim() || !selectedClient}>
+              <Button type="submit" disabled={loading || !name.trim()}>
                 {loading ? 'Bezig…' : isEdit ? 'Opslaan' : 'Aanmaken'}
               </Button>
             </div>
@@ -271,12 +294,14 @@ function ProjectModal({
 // ── Task Modal ─────────────────────────────────────────────────────────────────
 
 function TaskModal({
-  task, projectId, defaultStatus = 'todo', profiles, onClose, onSaved, onDeleted,
+  task, projectId, defaultStatus = 'todo', profiles, milestones = [], defaultMilestoneId, onClose, onSaved, onDeleted,
 }: {
   task?: Task
   projectId: string
   defaultStatus?: TaskStatus
   profiles: UserProfileLite[]
+  milestones?: Milestone[]
+  defaultMilestoneId?: string | null
   onClose: () => void
   onSaved: (t: Task) => void
   onDeleted?: (id: string) => void
@@ -287,6 +312,8 @@ function TaskModal({
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? defaultStatus)
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 'medium')
   const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? '')
+  const [milestoneId, setMilestoneId] = useState(task?.milestoneId ?? defaultMilestoneId ?? '')
+  const [startDate, setStartDate] = useState(task?.startDate ?? '')
   const [dueDate, setDueDate] = useState(task?.dueDate ?? '')
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [newSubtask, setNewSubtask] = useState('')
@@ -366,11 +393,13 @@ function TaskModal({
       const saved = await projectsDb.saveTask({
         id: task?.id,
         projectId,
+        milestoneId: milestoneId || null,
         title: title.trim(),
         description: description.trim() || null,
         status,
         priority,
         assigneeId: assigneeId || null,
+        startDate: startDate || null,
         dueDate: dueDate || null,
         position: 0,
       })
@@ -608,8 +637,31 @@ function TaskModal({
             }}
           />
 
+          {/* Start date */}
+          <TaskDatePicker value={startDate} onChange={setStartDate} />
+          <span className="text-text-muted text-xs">→</span>
           {/* Due date */}
           <TaskDatePicker value={dueDate} onChange={setDueDate} />
+
+          {/* Milestone */}
+          {milestones.length > 0 && (
+            <PillDropdown<string>
+              options={['__none__', ...milestones.map(m => m.id)]}
+              value={milestoneId || '__none__'}
+              onChange={v => setMilestoneId(v === '__none__' ? '' : v)}
+              renderLabel={() => {
+                const m = milestones.find(x => x.id === milestoneId)
+                return m
+                  ? <><span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} /><span>{m.name}</span></>
+                  : <><span className="w-2 h-2 rounded-full border border-dashed border-zinc-600" /><span className="text-zinc-500">Milestone</span></>
+              }}
+              renderOption={id => {
+                if (id === '__none__') return <><span className="w-2 h-2 rounded-full border border-dashed border-zinc-600" /><span>Geen milestone</span></>
+                const m = milestones.find(x => x.id === id)!
+                return <><span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} /><span>{m.name}</span></>
+              }}
+            />
+          )}
 
           {/* Error */}
           {error && <span className="text-xs text-red-400 ml-1">{error}</span>}
@@ -727,19 +779,32 @@ function TaskCard({
 // ── Kanban Board ───────────────────────────────────────────────────────────────
 
 function KanbanBoard({
-  tasks, profiles, onTaskClick, onAddTask, onStatusChange, selectedTaskIds, onSelectTask,
+  tasks, profiles, milestones = [], onTaskClick, onAddTask, onStatusChange, selectedTaskIds, onSelectTask,
 }: {
   tasks: Task[]
   profiles: UserProfileLite[]
+  milestones?: Milestone[]
   onTaskClick: (task: Task) => void
-  onAddTask: (status: TaskStatus) => void
+  onAddTask: (status: TaskStatus, milestoneId?: string | null) => void
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void
   selectedTaskIds?: Set<string>
   onSelectTask?: (id: string) => void
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
+  const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
 
+  const toggleMilestone = (id: string) => setCollapsedMilestones(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
+  })
+
+  // Build ordered milestone list (milestones + null for "no milestone")
+  const milestoneOrder = useMemo(() => [
+    ...milestones,
+    null, // "no milestone" bucket
+  ], [milestones])
+
+  // Group tasks: by status first, then by milestone within each status
   const byStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], in_review: [], done: [] }
     tasks.forEach(t => map[t.status].push(t))
@@ -802,42 +867,106 @@ function KanbanBoard({
             {/* Cards + drop zone */}
             <div
               className={clsx(
-                'flex-1 overflow-y-auto p-2 space-y-2 transition-colors duration-150',
+                'flex-1 overflow-y-auto p-2 transition-colors duration-150',
                 isOver && byStatus[id].length === 0 && 'bg-accent-blue/[0.06]',
               )}
             >
-              {byStatus[id].map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  profiles={profiles}
-                  onClick={() => { if (!draggedId) onTaskClick(task) }}
-                  isDragging={draggedId === task.id}
-                  isSelected={selectedTaskIds?.has(task.id)}
-                  onSelect={onSelectTask ? () => onSelectTask(task.id) : undefined}
-                  onDragStart={() => setDraggedId(task.id)}
-                  onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
-                />
-              ))}
+              {milestones.length > 0 ? (
+                // Group by milestone
+                milestoneOrder.map(ms => {
+                  const msId = ms?.id ?? null
+                  const msKey = msId ?? '__none__'
+                  const msTasks = byStatus[id].filter(t => (t.milestoneId ?? null) === msId)
+                  const isCollapsed = collapsedMilestones.has(msKey)
+                  if (msTasks.length === 0 && ms !== null) return null
+                  return (
+                    <div key={msKey} className="mb-2">
+                      {/* Milestone header */}
+                      <button
+                        onClick={() => toggleMilestone(msKey)}
+                        className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded text-[10px] font-medium text-text-muted hover:text-text-secondary hover:bg-white/[0.04] transition-colors mb-1"
+                      >
+                        <ChevronDown size={11} className={clsx('transition-transform', isCollapsed && '-rotate-90')} />
+                        {ms ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ms.color }} />
+                            <span className="truncate">{ms.name}</span>
+                            {ms.deadline && (
+                              <span className={clsx('ml-auto shrink-0 tabular-nums', new Date(ms.deadline) < new Date() ? 'text-red-400' : '')}>
+                                {new Date(ms.deadline).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-zinc-600">Geen milestone</span>
+                        )}
+                        <span className="ml-auto shrink-0 text-zinc-700">{msTasks.length}</span>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="space-y-2">
+                          {msTasks.map(task => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              profiles={profiles}
+                              onClick={() => { if (!draggedId) onTaskClick(task) }}
+                              isDragging={draggedId === task.id}
+                              isSelected={selectedTaskIds?.has(task.id)}
+                              onSelect={onSelectTask ? () => onSelectTask(task.id) : undefined}
+                              onDragStart={() => setDraggedId(task.id)}
+                              onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
+                            />
+                          ))}
+                          <button
+                            onClick={() => onAddTask(id, msId)}
+                            className="w-full flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-700 hover:text-text-muted hover:bg-white/[0.04] rounded transition-colors"
+                          >
+                            <Plus size={10} />Taak
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              ) : (
+                // No milestones: flat list
+                <div className="space-y-2">
+                  {byStatus[id].map(task => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      profiles={profiles}
+                      onClick={() => { if (!draggedId) onTaskClick(task) }}
+                      isDragging={draggedId === task.id}
+                      isSelected={selectedTaskIds?.has(task.id)}
+                      onSelect={onSelectTask ? () => onSelectTask(task.id) : undefined}
+                      onDragStart={() => setDraggedId(task.id)}
+                      onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
+                    />
+                  ))}
+                </div>
+              )}
 
-              {/* Drop indicator when dragging over an empty or non-source column */}
+              {/* Drop indicator */}
               {isOver && draggedId && !byStatus[id].some(t => t.id === draggedId) && (
-                <div className="border-2 border-dashed border-accent-blue/40 rounded-lg h-16 flex items-center justify-center">
+                <div className="border-2 border-dashed border-accent-blue/40 rounded-lg h-16 flex items-center justify-center mt-2">
                   <span className="text-xs text-accent-blue/60">Hier neerzetten</span>
                 </div>
               )}
             </div>
 
             {/* Add task */}
-            <div className="p-2 border-t border-border-subtle">
-              <button
-                onClick={() => onAddTask(id)}
-                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-lg transition-colors"
-              >
-                <Plus size={12} />
-                Taak toevoegen
-              </button>
-            </div>
+            {milestones.length === 0 && (
+              <div className="p-2 border-t border-border-subtle">
+                <button
+                  onClick={() => onAddTask(id, null)}
+                  className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-white/[0.06] rounded-lg transition-colors"
+                >
+                  <Plus size={12} />
+                  Taak toevoegen
+                </button>
+              </div>
+            )}
           </div>
         )
       })}
@@ -847,132 +976,163 @@ function KanbanBoard({
 
 // ── List View ──────────────────────────────────────────────────────────────────
 
-function ListView({
-  tasks, profiles, onTaskClick, onAddTask, selectedTaskIds, onSelectTask,
+function TaskRow({
+  task, profiles, onTaskClick, selectedTaskIds, onSelectTask,
 }: {
-  tasks: Task[]
+  task: Task
   profiles: UserProfileLite[]
   onTaskClick: (task: Task) => void
-  onAddTask: (status: TaskStatus) => void
   selectedTaskIds?: Set<string>
   onSelectTask?: (id: string) => void
 }) {
-  const [collapsed, setCollapsed] = useState<Record<TaskStatus, boolean>>({
-    todo: false, in_progress: false, in_review: false, done: false,
-  })
+  const assignee = profiles.find(p => p.id === task.assigneeId)
+  const prio = PRIORITY_CONFIG[task.priority]
+  const statusCfg = TASK_STATUSES.find(s => s.id === task.status)!
+  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
+  const isSelected = selectedTaskIds?.has(task.id)
+  return (
+    <div
+      onClick={() => onTaskClick(task)}
+      className={clsx(
+        'flex items-center gap-3 px-4 py-2.5 bg-surface-0 hover:bg-white/[0.02] cursor-pointer group transition-colors',
+        isSelected && 'bg-accent-blue/[0.05]',
+      )}
+    >
+      {onSelectTask && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onSelectTask(task.id) }}
+          className={clsx(
+            'w-4 h-4 rounded border shrink-0 transition-all flex items-center justify-center',
+            isSelected ? 'bg-accent-blue border-accent-blue' : 'border-zinc-600 bg-transparent opacity-0 group-hover:opacity-100',
+          )}
+        >
+          {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
+        </button>
+      )}
+      <div className={clsx('w-[3px] h-5 rounded-full shrink-0', {
+        'bg-zinc-600': task.priority === 'low', 'bg-blue-500': task.priority === 'medium',
+        'bg-orange-500': task.priority === 'high', 'bg-red-500': task.priority === 'urgent',
+      })} />
+      <statusCfg.Icon size={14} className={clsx(statusCfg.color, 'shrink-0')} />
+      <span className="flex-1 text-sm text-text-primary group-hover:text-white transition-colors truncate">{task.title}</span>
+      {task.priority !== 'medium' && (
+        <span className={clsx('hidden sm:flex items-center gap-1 text-xs shrink-0', prio.flagColor)}>
+          <Flag size={10} />{prio.label}
+        </span>
+      )}
+      {task.dueDate && (
+        <span className={clsx('text-xs shrink-0', isOverdue ? 'text-red-400' : 'text-text-muted')}>
+          {new Date(task.dueDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+        </span>
+      )}
+      {assignee
+        ? <UserAvatar profile={assignee} size="w-6 h-6" textSize="text-[10px]" className="shrink-0" />
+        : <div className="w-6 h-6 rounded-full border border-dashed border-zinc-700 shrink-0" />
+      }
+    </div>
+  )
+}
 
-  const byStatus = useMemo(() => {
-    const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], in_review: [], done: [] }
-    tasks.forEach(t => map[t.status].push(t))
-    return map
-  }, [tasks])
+function ListView({
+  tasks, profiles, milestones = [], onTaskClick, onAddTask, selectedTaskIds, onSelectTask,
+}: {
+  tasks: Task[]
+  profiles: UserProfileLite[]
+  milestones?: Milestone[]
+  onTaskClick: (task: Task) => void
+  onAddTask: (status: TaskStatus, milestoneId?: string | null) => void
+  selectedTaskIds?: Set<string>
+  onSelectTask?: (id: string) => void
+}) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const toggleCollapse = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+
+  if (milestones.length > 0) {
+    // ── Milestone-first grouping ──────────────────────────────────────────────
+    const milestoneOrder = [...milestones, null]
+    return (
+      <div className="space-y-2 pb-4">
+        {milestoneOrder.map(ms => {
+          const msKey = ms?.id ?? '__none__'
+          const msTasks = tasks.filter(t => (t.milestoneId ?? null) === (ms?.id ?? null))
+          if (msTasks.length === 0 && ms !== null) return null
+          const isCollapsed = !!collapsed[msKey]
+          const deadlineOverdue = ms?.deadline && new Date(ms.deadline) < new Date()
+
+          return (
+            <div key={msKey} className="rounded-xl border border-border-subtle overflow-hidden">
+              <button
+                onClick={() => toggleCollapse(msKey)}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-surface-1 hover:bg-white/[0.03] transition-colors"
+              >
+                {ms && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ms.color }} />}
+                <span className="text-xs font-semibold text-text-primary">
+                  {ms ? ms.name : <span className="text-text-muted font-normal italic">Geen milestone</span>}
+                </span>
+                {ms?.deadline && (
+                  <span className={clsx('text-xs ml-1', deadlineOverdue ? 'text-red-400' : 'text-text-muted')}>
+                    · {new Date(ms.deadline).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                  </span>
+                )}
+                <span className="text-xs text-text-muted bg-white/[0.06] px-1.5 py-0.5 rounded-full ml-2">{msTasks.length}</span>
+                <ChevronDown size={13} className={clsx('ml-auto text-text-muted transition-transform', isCollapsed && '-rotate-90')} />
+              </button>
+              {!isCollapsed && (
+                <div className="divide-y divide-border-subtle">
+                  {msTasks.map(task => (
+                    <TaskRow key={task.id} task={task} profiles={profiles} onTaskClick={onTaskClick}
+                      selectedTaskIds={selectedTaskIds} onSelectTask={onSelectTask} />
+                  ))}
+                  <button
+                    onClick={() => onAddTask('todo', ms?.id ?? null)}
+                    className="w-full flex items-center gap-3 px-4 py-2 bg-surface-0 hover:bg-white/[0.02] text-text-muted hover:text-text-secondary transition-colors"
+                  >
+                    <div className="w-[3px] h-4 rounded-full bg-transparent shrink-0" />
+                    <Plus size={13} /><span className="text-xs">Taak toevoegen</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // ── Status-first grouping (no milestones) ─────────────────────────────────
+  const byStatus: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], in_review: [], done: [] }
+  tasks.forEach(t => byStatus[t.status].push(t))
 
   return (
     <div className="space-y-2 pb-4">
       {TASK_STATUSES.map(({ id, label, Icon, color, ring }) => {
         const groupTasks = byStatus[id]
-        const isCollapsed = collapsed[id]
+        const isCollapsed = !!collapsed[id]
         return (
           <div key={id} className="rounded-xl border border-border-subtle overflow-hidden">
-            {/* Group header */}
             <button
-              onClick={() => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))}
+              onClick={() => toggleCollapse(id)}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-surface-1 hover:bg-white/[0.03] transition-colors"
             >
               <div className={clsx('w-2 h-2 rounded-full shrink-0', ring)} />
               <Icon size={13} className={color} />
               <span className={clsx('text-xs font-semibold uppercase tracking-wider', color)}>{label}</span>
-              <span className="text-xs text-text-muted bg-white/[0.06] px-1.5 py-0.5 rounded-full ml-1">
-                {groupTasks.length}
-              </span>
-              <ChevronDown
-                size={13}
-                className={clsx('ml-auto text-text-muted transition-transform', isCollapsed && '-rotate-90')}
-              />
+              <span className="text-xs text-text-muted bg-white/[0.06] px-1.5 py-0.5 rounded-full ml-1">{groupTasks.length}</span>
+              <ChevronDown size={13} className={clsx('ml-auto text-text-muted transition-transform', isCollapsed && '-rotate-90')} />
             </button>
-
-            {/* Task rows */}
             {!isCollapsed && (
               <div className="divide-y divide-border-subtle">
-                {groupTasks.map(task => {
-                  const assignee = profiles.find(p => p.id === task.assigneeId)
-                  const prio = PRIORITY_CONFIG[task.priority]
-                  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
-                  const isSelected = selectedTaskIds?.has(task.id)
-                  return (
-                    <div
-                      key={task.id}
-                      onClick={() => onTaskClick(task)}
-                      className={clsx(
-                        'flex items-center gap-3 px-4 py-2.5 bg-surface-0 hover:bg-white/[0.02] cursor-pointer group transition-colors',
-                        isSelected && 'bg-accent-blue/[0.05]',
-                      )}
-                    >
-                      {/* Checkbox */}
-                      {onSelectTask && (
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); onSelectTask(task.id) }}
-                          className={clsx(
-                            'w-4 h-4 rounded border shrink-0 transition-all flex items-center justify-center',
-                            isSelected
-                              ? 'bg-accent-blue border-accent-blue'
-                              : 'border-zinc-600 bg-transparent opacity-0 group-hover:opacity-100',
-                          )}
-                        >
-                          {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
-                        </button>
-                      )}
-
-                      {/* Priority indicator */}
-                      <div className={clsx('w-[3px] h-5 rounded-full shrink-0', {
-                        'bg-zinc-600':   task.priority === 'low',
-                        'bg-blue-500':   task.priority === 'medium',
-                        'bg-orange-500': task.priority === 'high',
-                        'bg-red-500':    task.priority === 'urgent',
-                      })} />
-
-                      {/* Status icon */}
-                      <Icon size={14} className={clsx(color, 'shrink-0')} />
-
-                      {/* Title */}
-                      <span className="flex-1 text-sm text-text-primary group-hover:text-white transition-colors truncate">
-                        {task.title}
-                      </span>
-
-                      {/* Priority label (non-medium only) */}
-                      {task.priority !== 'medium' && (
-                        <span className={clsx('hidden sm:flex items-center gap-1 text-xs shrink-0', prio.flagColor)}>
-                          <Flag size={10} />
-                          {prio.label}
-                        </span>
-                      )}
-
-                      {/* Due date */}
-                      {task.dueDate && (
-                        <span className={clsx('text-xs shrink-0', isOverdue ? 'text-red-400' : 'text-text-muted')}>
-                          {new Date(task.dueDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-                        </span>
-                      )}
-
-                      {/* Assignee */}
-                      {assignee ? (
-                        <UserAvatar profile={assignee} size="w-6 h-6" textSize="text-[10px]" className="shrink-0" />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full border border-dashed border-zinc-700 shrink-0" />
-                      )}
-                    </div>
-                  )
-                })}
-
-                {/* Add row */}
+                {groupTasks.map(task => (
+                  <TaskRow key={task.id} task={task} profiles={profiles} onTaskClick={onTaskClick}
+                    selectedTaskIds={selectedTaskIds} onSelectTask={onSelectTask} />
+                ))}
                 <button
-                  onClick={() => onAddTask(id)}
+                  onClick={() => onAddTask(id, null)}
                   className="w-full flex items-center gap-3 px-4 py-2 bg-surface-0 hover:bg-white/[0.02] text-text-muted hover:text-text-secondary transition-colors"
                 >
                   <div className="w-[3px] h-4 rounded-full bg-transparent shrink-0" />
-                  <Plus size={13} />
-                  <span className="text-xs">Taak toevoegen</span>
+                  <Plus size={13} /><span className="text-xs">Taak toevoegen</span>
                 </button>
               </div>
             )}
@@ -1080,7 +1240,7 @@ function AllTasksView({
                 <div className="divide-y divide-border-subtle">
                   {groupTasks.map(task => {
                     const project  = projectMap[task.projectId]
-                    const client   = project ? clientMap[project.clientId] : undefined
+                    const client   = project?.clientId ? clientMap[project.clientId] : undefined
                     const assignee = profiles.find(p => p.id === task.assigneeId)
                     const prio     = PRIORITY_CONFIG[task.priority]
                     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
@@ -1272,12 +1432,12 @@ export function Projects() {
   } = useProjectsData()
 
   // Navigation state
-  const [leftNav, setLeftNav] = useState<'projects' | 'overview'>('projects')
+  const [leftNav, setLeftNav] = useState<'projects' | 'overview' | 'timeline'>('projects')
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   // View toggle
-  const [boardView, setBoardView] = useState<'kanban' | 'list' | 'activity'>('kanban')
+  const [boardView, setBoardView] = useState<'kanban' | 'list' | 'gantt' | 'activity'>('kanban')
 
   // Sprints state
   const [sprints, setSprints] = useState<Sprint[]>([])
@@ -1296,6 +1456,12 @@ export function Projects() {
   const [activities, setActivities] = useState<ProjectActivity[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
 
+  // Milestone state
+  const [milestones, setMilestones] = useState<Milestone[]>([])
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [editMilestone, setEditMilestone] = useState<Milestone | undefined>()
+  const [taskDefaultMilestoneId, setTaskDefaultMilestoneId] = useState<string | null>(null)
+
   // Modal state
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [editProject, setEditProject] = useState<Project | undefined>()
@@ -1312,9 +1478,9 @@ export function Projects() {
   function openProject(project: Project) {
     setSelectedProject(project)
     loadProjectTasks(project.id)
-    // Load sprints and labels for this project
     projectsDb.fetchSprints(project.id).then(setSprints).catch(() => {})
     projectsDb.fetchProjectLabels(project.id).then(setLabels).catch(() => {})
+    projectsDb.fetchMilestones(project.id).then(setMilestones).catch(() => {})
     setSelectedSprintId('all')
     setFilters(EMPTY_FILTERS)
     setSelectedTaskIds(new Set())
@@ -1473,15 +1639,18 @@ export function Projects() {
   // Filtered projects
   const filteredProjects = useMemo(() => {
     if (!selectedClientId) return projects
+    if (selectedClientId === '__no_client__') return projects.filter(p => !p.clientId)
     return projects.filter(p => p.clientId === selectedClientId)
   }, [projects, selectedClientId])
 
   // Client list with counts
   const clientsWithProjects = useMemo(() => {
     const counts: Record<string, number> = {}
-    projects.forEach(p => { counts[p.clientId] = (counts[p.clientId] ?? 0) + 1 })
+    projects.forEach(p => { if (p.clientId) counts[p.clientId] = (counts[p.clientId] ?? 0) + 1 })
     return clients.filter(c => counts[c.id]).map(c => ({ ...c, count: counts[c.id] ?? 0 }))
   }, [clients, projects])
+
+  const internProjectCount = useMemo(() => projects.filter(p => !p.clientId).length, [projects])
 
   // ── Board view ─────────────────────────────────────────────────────────────
 
@@ -1549,6 +1718,12 @@ export function Projects() {
                   <List size={13} />Lijst
                 </button>
                 <button
+                  onClick={() => setBoardView('gantt')}
+                  className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors', boardView === 'gantt' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary')}
+                >
+                  <GanttChartSquare size={13} />Gantt
+                </button>
+                <button
                   onClick={() => { setBoardView('activity'); loadActivity(selectedProject.id) }}
                   className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors', boardView === 'activity' ? 'bg-white/[0.08] text-text-primary' : 'text-text-muted hover:text-text-secondary')}
                 >
@@ -1558,8 +1733,11 @@ export function Projects() {
               <Button variant="outline" size="sm" onClick={() => { setEditProject(selectedProject); setShowProjectModal(true) }} className="h-7 text-xs">
                 Bewerken
               </Button>
+              <Button variant="outline" size="sm" onClick={() => { setEditMilestone(undefined); setShowMilestoneModal(true) }} className="h-7 text-xs gap-1">
+                <Plus size={12} />Milestone
+              </Button>
               {boardView !== 'activity' && (
-                <Button size="sm" onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setShowTaskModal(true) }} className="h-7 text-xs gap-1.5">
+                <Button size="sm" onClick={() => { setEditTask(undefined); setTaskDefaultStatus('todo'); setTaskDefaultMilestoneId(null); setShowTaskModal(true) }} className="h-7 text-xs gap-1.5">
                   <Plus size={13} />Taak
                 </Button>
               )}
@@ -1581,7 +1759,7 @@ export function Projects() {
         )}
 
         {/* Filter bar */}
-        {(profiles.length > 0 || labels.length > 0 || sprints.length > 0) && boardView !== 'activity' && (
+        {(profiles.length > 0 || labels.length > 0 || sprints.length > 0) && boardView !== 'activity' && boardView !== 'gantt' && (
           <div className="px-4 lg:px-6 py-2 border-b border-border-subtle shrink-0">
             <FilterBar
               filters={filters}
@@ -1593,14 +1771,20 @@ export function Projects() {
           </div>
         )}
 
-        {/* Board / List / Activity */}
-        <div className={clsx('flex-1 px-4 lg:px-6 pt-4 lg:pt-5', boardView === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
+        {/* Board / List / Gantt / Activity */}
+        <div className={clsx(
+          'flex-1',
+          boardView === 'kanban' ? 'overflow-hidden px-4 lg:px-6 pt-4 lg:pt-5' :
+          boardView === 'gantt'  ? 'overflow-hidden' :
+          'overflow-y-auto px-4 lg:px-6 pt-4 lg:pt-5'
+        )}>
           {boardView === 'kanban' ? (
             <KanbanBoard
               tasks={sprintFilteredTasks}
               profiles={profiles}
+              milestones={milestones}
               onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
-              onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
+              onAddTask={(status, msId) => { setEditTask(undefined); setTaskDefaultStatus(status); setTaskDefaultMilestoneId(msId ?? null); setShowTaskModal(true) }}
               onStatusChange={handleStatusChange}
               selectedTaskIds={selectedTaskIds}
               onSelectTask={id => setSelectedTaskIds(prev => {
@@ -1613,6 +1797,7 @@ export function Projects() {
             <ListView
               tasks={sprintFilteredTasks}
               profiles={profiles}
+              milestones={milestones}
               onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
               selectedTaskIds={selectedTaskIds}
               onSelectTask={id => setSelectedTaskIds(prev => {
@@ -1620,7 +1805,17 @@ export function Projects() {
                 next.has(id) ? next.delete(id) : next.add(id)
                 return next
               })}
-              onAddTask={status => { setEditTask(undefined); setTaskDefaultStatus(status); setShowTaskModal(true) }}
+              onAddTask={(status, msId) => { setEditTask(undefined); setTaskDefaultStatus(status); setTaskDefaultMilestoneId(msId ?? null); setShowTaskModal(true) }}
+            />
+          ) : boardView === 'gantt' ? (
+            <GanttView
+              tasks={tasks}
+              sprints={sprints}
+              milestones={milestones}
+              projectStartDate={selectedProject.startDate}
+              projectDeadline={selectedProject.deadline}
+              onTaskClick={task => navigate(`/projecten/${task.projectId}/taken/${task.id}`)}
+              onMilestoneClick={ms => { setEditMilestone(ms); setShowMilestoneModal(true) }}
             />
           ) : (
             /* Activity feed */
@@ -1687,11 +1882,12 @@ export function Projects() {
             task={editTask}
             projectId={selectedProject.id}
             defaultStatus={taskDefaultStatus}
+            defaultMilestoneId={taskDefaultMilestoneId}
+            milestones={milestones}
             profiles={profiles}
-            onClose={() => { setShowTaskModal(false); setEditTask(undefined) }}
+            onClose={() => { setShowTaskModal(false); setEditTask(undefined); setTaskDefaultMilestoneId(null) }}
             onSaved={(t) => {
               handleTaskSaved(t)
-              // Log activity
               if (profile?.email) {
                 projectsDb.logActivity({
                   projectId: selectedProject.id,
@@ -1716,6 +1912,19 @@ export function Projects() {
             }}
           />
         )}
+        {showMilestoneModal && (
+          <MilestoneModal
+            projectId={selectedProject.id}
+            milestone={editMilestone}
+            onClose={() => { setShowMilestoneModal(false); setEditMilestone(undefined) }}
+            onSaved={m => setMilestones(prev => {
+              const idx = prev.findIndex(x => x.id === m.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = m; return next }
+              return [...prev, m]
+            })}
+            onDeleted={id => setMilestones(prev => prev.filter(x => x.id !== id))}
+          />
+        )}
       </div>
     )
   }
@@ -1727,10 +1936,12 @@ export function Projects() {
       {/* Mobile project select */}
       <div className="lg:hidden border-b border-border-subtle px-4 py-3 flex items-center gap-2">
         <Select
-          value={leftNav === 'overview' ? '__overview__' : (selectedClientId ?? '__all__')}
+          value={leftNav === 'overview' ? '__overview__' : leftNav === 'timeline' ? '__timeline__' : (selectedClientId ?? '__all__')}
           onValueChange={(v) => {
             if (v === '__overview__') {
               openOverview()
+            } else if (v === '__timeline__') {
+              setLeftNav('timeline')
             } else if (v === '__all__') {
               setLeftNav('projects')
               setSelectedClientId(null)
@@ -1752,6 +1963,7 @@ export function Projects() {
           <SelectContent>
             <SelectGroup>
               <SelectItem value="__overview__">Alle taken</SelectItem>
+              <SelectItem value="__timeline__">Tijdlijn</SelectItem>
               <SelectItem value="__all__">Alle klanten ({projects.length})</SelectItem>
               {clientsWithProjects.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
@@ -1766,7 +1978,7 @@ export function Projects() {
       {/* Left: nav (desktop only) */}
       <aside className="w-52 shrink-0 border-r border-border-subtle hidden lg:flex flex-col">
         {/* Overview section */}
-        <div className="px-2 pt-3 pb-2 border-b border-border-subtle">
+        <div className="px-2 pt-3 pb-2 border-b border-border-subtle space-y-0.5">
           <button
             onClick={openOverview}
             className={clsx(
@@ -1776,6 +1988,16 @@ export function Projects() {
           >
             <List size={14} strokeWidth={1.8} />
             Alle taken
+          </button>
+          <button
+            onClick={() => setLeftNav('timeline')}
+            className={clsx(
+              'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+              leftNav === 'timeline' ? 'bg-white/[0.07] text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+            )}
+          >
+            <CalendarRange size={14} strokeWidth={1.8} />
+            Tijdlijn
           </button>
         </div>
 
@@ -1807,11 +2029,23 @@ export function Projects() {
               <span className="text-xs text-text-muted ml-2 shrink-0">{c.count}</span>
             </button>
           ))}
+          {internProjectCount > 0 && (
+            <button
+              onClick={() => { setLeftNav('projects'); setSelectedClientId('__no_client__') }}
+              className={clsx(
+                'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors',
+                leftNav === 'projects' && selectedClientId === '__no_client__' ? 'bg-white/[0.07] text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+              )}
+            >
+              <span className="truncate text-left text-text-muted italic">Intern</span>
+              <span className="text-xs text-text-muted ml-2 shrink-0">{internProjectCount}</span>
+            </button>
+          )}
         </nav>
       </aside>
 
-      {/* Right: overview OR project grid */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Right: overview / timeline / project grid */}
+      <main className={clsx('flex-1', leftNav === 'timeline' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto')}>
         {leftNav === 'overview' ? (
           <>
             <PageHeader
@@ -1835,10 +2069,24 @@ export function Projects() {
               )}
             </div>
           </>
+        ) : leftNav === 'timeline' ? (
+          <>
+            <PageHeader
+              title="Tijdlijn"
+              subtitle={`${projects.filter(p => p.status !== 'completed').length} actieve projecten`}
+            />
+            <div className="flex-1 overflow-hidden">
+              <ProjectsTimeline
+                projects={projects}
+                clients={clients}
+                onProjectClick={openProject}
+              />
+            </div>
+          </>
         ) : (
           <>
             <PageHeader
-              title={selectedClientId ? (clients.find(c => c.id === selectedClientId)?.companyName ?? 'Projecten') : 'Projecten'}
+              title={selectedClientId === '__no_client__' ? 'Intern' : selectedClientId ? (clients.find(c => c.id === selectedClientId)?.companyName ?? 'Projecten') : 'Projecten'}
               subtitle={`${filteredProjects.length} projecten`}
               actions={
                 <Button size="sm" onClick={() => { setEditProject(undefined); setShowProjectModal(true) }}>
@@ -1868,7 +2116,7 @@ export function Projects() {
                     <ProjectCard
                       key={project.id}
                       project={project}
-                      clientName={clients.find(c => c.id === project.clientId)?.companyName ?? '—'}
+                      clientName={project.clientId ? (clients.find(c => c.id === project.clientId)?.companyName ?? '—') : 'Intern'}
                       taskCount={taskCounts[project.id] ?? 0}
                       onClick={() => openProject(project)}
                       onEdit={() => { setEditProject(project); setShowProjectModal(true) }}

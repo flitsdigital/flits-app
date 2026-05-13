@@ -1,5 +1,5 @@
 import { supabaseAdmin, withTimeout } from './supabase'
-import type { Project, ProjectLabel, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../types'
+import type { Milestone, Project, ProjectLabel, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../types'
 
 // ── Task Comments ──────────────────────────────────────────────────────────────
 
@@ -109,11 +109,13 @@ function mapActivity(row: DbProjectActivity): ProjectActivity {
 
 interface DbProject {
   id: string
-  client_id: string
+  client_id: string | null
   name: string
   description: string | null
   status: ProjectStatus
   color: string | null
+  start_date: string | null
+  deadline: string | null
   created_at: string
   updated_at: string
 }
@@ -121,16 +123,44 @@ interface DbProject {
 interface DbTask {
   id: string
   project_id: string
+  milestone_id: string | null
   title: string
   description: string | null
   status: TaskStatus
   priority: TaskPriority
   assignee_id: string | null
+  start_date: string | null
   due_date: string | null
   sprint_id: string | null
   position: number
   created_at: string
   updated_at: string
+}
+
+interface DbMilestone {
+  id: string
+  project_id: string
+  name: string
+  deadline: string | null
+  description: string | null
+  color: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+function mapMilestone(row: DbMilestone): Milestone {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    deadline: row.deadline ?? null,
+    description: row.description ?? null,
+    color: row.color,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 interface DbProjectLabel {
@@ -164,11 +194,13 @@ interface DbSubtask {
 function mapProject(row: DbProject): Project {
   return {
     id: row.id,
-    clientId: row.client_id,
+    clientId: row.client_id ?? null,
     name: row.name,
     description: row.description,
     status: row.status,
     color: row.color ?? '#3b82f6',
+    startDate: row.start_date ?? null,
+    deadline: row.deadline ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -178,11 +210,13 @@ function mapTask(row: DbTask & { label_ids?: string[] }): Task {
   return {
     id: row.id,
     projectId: row.project_id,
+    milestoneId: row.milestone_id ?? null,
     title: row.title,
     description: row.description,
     status: row.status,
     priority: row.priority,
     assigneeId: row.assignee_id,
+    startDate: row.start_date ?? null,
     dueDate: row.due_date,
     sprintId: row.sprint_id,
     labelIds: row.label_ids ?? [],
@@ -255,18 +289,22 @@ export const projectsDb = {
 
   async saveProject(input: {
     id?: string
-    clientId: string
+    clientId?: string | null
     name: string
     description?: string | null
     status: ProjectStatus
     color: string
+    startDate?: string | null
+    deadline?: string | null
   }): Promise<Project> {
     const payload = {
-      client_id: input.clientId,
+      client_id: input.clientId ?? null,
       name: input.name,
       description: input.description ?? null,
       status: input.status,
       color: input.color,
+      start_date: input.startDate ?? null,
+      deadline: input.deadline ?? null,
       updated_at: new Date().toISOString(),
     }
 
@@ -307,21 +345,25 @@ export const projectsDb = {
   async saveTask(input: {
     id?: string
     projectId: string
+    milestoneId?: string | null
     title: string
     description?: string | null
     status: TaskStatus
     priority: TaskPriority
     assigneeId?: string | null
+    startDate?: string | null
     dueDate?: string | null
     sprintId?: string | null
     position?: number
   }): Promise<Task> {
     const payload = {
+      milestone_id: input.milestoneId ?? null,
       title: input.title,
       description: input.description ?? null,
       status: input.status,
       priority: input.priority,
       assignee_id: input.assigneeId ?? null,
+      start_date: input.startDate ?? null,
       due_date: input.dueDate ?? null,
       sprint_id: input.sprintId ?? null,
       updated_at: new Date().toISOString(),
@@ -541,5 +583,46 @@ export const projectsDb = {
       supabaseAdmin.from('task_labels').select('label_id').eq('task_id', taskId)
     )
     return (data ?? []).map((r: { label_id: string }) => r.label_id)
+  },
+
+  // ── Milestones ────────────────────────────────────────────────────────────
+
+  async fetchMilestones(projectId: string): Promise<Milestone[]> {
+    const { data, error } = await withTimeout(
+      supabaseAdmin.from('milestones').select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+    )
+    if (error) throw error
+    return (data as DbMilestone[] ?? []).map(mapMilestone)
+  },
+
+  async saveMilestone(input: {
+    id?: string
+    projectId: string
+    name: string
+    deadline?: string | null
+    description?: string | null
+    color?: string
+    sortOrder?: number
+  }): Promise<Milestone> {
+    const payload = {
+      project_id: input.projectId,
+      name: input.name,
+      deadline: input.deadline ?? null,
+      description: input.description ?? null,
+      color: input.color ?? '#6366f1',
+      sort_order: input.sortOrder ?? 0,
+      updated_at: new Date().toISOString(),
+    }
+    const query = input.id
+      ? supabaseAdmin.from('milestones').update(payload as never).eq('id', input.id).select().single()
+      : supabaseAdmin.from('milestones').insert(payload as never).select().single()
+    const { data, error } = await withTimeout(query)
+    if (error) throw error
+    return mapMilestone(data as DbMilestone)
+  },
+
+  async deleteMilestone(id: string): Promise<void> {
+    const { error } = await withTimeout(supabaseAdmin.from('milestones').delete().eq('id', id))
+    if (error) throw error
   },
 }
