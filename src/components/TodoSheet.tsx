@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button'
 import { DatePickerButton } from '@/components/ui/date-picker-button'
 import { MentionTextarea, parseMentions } from './MentionTextarea'
 import { useTodosData } from '../hooks/useTodosData'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { useUIStore } from '../store/useUIStore'
 import { useNotifications } from '../hooks/useNotifications'
 import { notificationsDb } from '../lib/notificationsDb'
-import { projectsDb } from '../lib/projectsDb'
 import { useAuthStore } from '../store/useAuthStore'
 import { useStore } from '../store/useStore'
 import type { Todo } from '../lib/todosDb'
@@ -87,6 +87,7 @@ function TodoRow({
   const [expanded, setExpanded] = useState(false)
   const [notes, setNotes] = useState(todo.notes ?? '')
   const profile = useAuthStore((s) => s.profile)
+  const { profiles: teamProfiles } = useTeamProfiles()
 
   const isOverdue =
     todo.dueDate && !todo.done && new Date(todo.dueDate + 'T00:00:00') < new Date()
@@ -98,10 +99,9 @@ function TodoRow({
       // Process @mentions
       if (profile?.email) {
         try {
-          const allProfiles = await projectsDb.fetchProfilesBasic()
-          const emails = parseMentions(notes, allProfiles)
+          const emails = parseMentions(notes, teamProfiles)
           for (const email of emails) {
-            const target = allProfiles.find((p) => p.email === email)
+            const target = teamProfiles.find((p) => p.email === email)
             if (!target || target.email === profile.email) continue
             await notificationsDb.create({
               userId: target.id,

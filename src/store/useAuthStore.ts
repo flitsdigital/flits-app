@@ -200,6 +200,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       posts: [],
       clientInvoices: [],
       initialized: false,
+      postsScope: 'bootstrap',
       error: null,
     })
     set({ session: null, profile: null })

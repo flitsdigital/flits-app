@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { projectsDb } from '../lib/projectsDb'
 import { projectsListCache } from '../lib/appCaches'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { useAuthStore } from '../store/useAuthStore'
 import type { Project, Task, TaskStatus } from '../types'
 
-export interface UserProfileLite {
+export type UserProfileLite = {
   id: string
   email: string
   name?: string | null
@@ -17,20 +18,18 @@ export function useProjectsData() {
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
-  const [profiles, setProfiles] = useState<UserProfileLite[]>([])
+  const { profiles } = useTeamProfiles()
   const [loading, setLoading] = useState(true)
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [allTasksLoading, setAllTasksLoading] = useState(false)
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true)
-    const [projData, taskData, profileData] = await Promise.all([
+    const [projData, taskData] = await Promise.all([
       projectsDb.fetchProjects(),
       projectsDb.fetchTaskRefs(),
-      projectsDb.fetchProfilesBasic(),
     ])
     setProjects(projData)
-    setProfiles(profileData)
 
     const counts: Record<string, number> = {}
     taskData.forEach((t) => {

@@ -46,9 +46,14 @@ export async function fetchProfilesAdminCached(): Promise<UserProfile[]> {
 }
 
 /** Call on sign-out or after profile/team mutations. */
+export const PROFILES_INVALIDATE_EVENT = 'crm:profiles-invalidate'
+
 export function invalidateAppCaches() {
   profilesBasicCache.invalidate()
   profilesAdminCache.invalidate()
   projectsListCache.invalidate()
   projectTaskRefsCache.invalidate()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(PROFILES_INVALIDATE_EVENT))
+  }
 }

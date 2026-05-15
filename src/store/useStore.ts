@@ -8,6 +8,7 @@ import { newId } from '../lib/id'
 import { markClientsSynced, markFullBootstrap } from '../lib/storeFreshness'
 
 let fetchClientsInFlight: Promise<void> | null = null
+let ensureAllPostsInFlight: Promise<void> | null = null
 
 function loadFromLocalStorage(): Client[] | null {
   try {
@@ -27,9 +28,11 @@ interface StoreState {
   posts: Post[]
   clientInvoices: ClientInvoice[]
   initialized: boolean
+  postsScope: 'bootstrap' | 'full'
   error: string | null
   fetchClients: () => Promise<void>
   fetchClientsOnly: () => Promise<void>
+  ensureAllPosts: () => Promise<void>
   addClient: (data: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'nextInvoiceDate' | 'lastInvoiceDate'>) => Promise<Client>
   updateClient: (id: string, data: Partial<Client>) => Promise<void>
   deleteClient: (id: string) => Promise<void>
@@ -50,6 +53,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   posts: [],
   clientInvoices: [],
   initialized: false,
+  postsScope: 'bootstrap',
   error: null,
 
   fetchClientsOnly: async () => {
@@ -91,10 +95,17 @@ export const useStore = create<StoreState>()((set, get) => ({
         }
 
         const [posts, clientInvoices] = await Promise.all([
-          postDb.fetchAll(),
+          postDb.fetchForBootstrap(),
           clientInvoiceDb.fetchAll().catch(() => [] as ClientInvoice[]),
         ])
-        set({ clients, posts, clientInvoices, initialized: true, error: null })
+        set({
+          clients,
+          posts,
+          clientInvoices,
+          initialized: true,
+          postsScope: 'bootstrap',
+          error: null,
+        })
         markFullBootstrap()
       } catch (e) {
         set({ initialized: true, error: errorMessage(e) })
@@ -104,6 +115,24 @@ export const useStore = create<StoreState>()((set, get) => ({
     })
 
     return fetchClientsInFlight
+  },
+
+  ensureAllPosts: async () => {
+    if (get().postsScope === 'full') return
+    if (ensureAllPostsInFlight) return ensureAllPostsInFlight
+
+    ensureAllPostsInFlight = (async () => {
+      try {
+        const posts = await postDb.fetchAll()
+        set({ posts, postsScope: 'full' })
+      } catch (e) {
+        set({ error: errorMessage(e) })
+      }
+    })().finally(() => {
+      ensureAllPostsInFlight = null
+    })
+
+    return ensureAllPostsInFlight
   },
 
   addClient: async (data) => {

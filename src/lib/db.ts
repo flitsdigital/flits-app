@@ -260,7 +260,31 @@ function postToRow(post: Post): DbPost {
   }
 }
 
+/** Months of posts loaded on initial CRM bootstrap (full load via ensureAllPosts). */
+export const POST_BOOTSTRAP_MONTHS = 18
+
+function bootstrapSinceDate(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() - POST_BOOTSTRAP_MONTHS)
+  return d.toISOString().slice(0, 10)
+}
+
 export const postDb = {
+  /** Recent posts for dashboard/timeline — faster first paint. */
+  async fetchForBootstrap(): Promise<Post[]> {
+    const since = bootstrapSinceDate()
+    const { data, error } = await withTimeout(
+      supabase
+        .from('posts')
+        .select('*')
+        .or(`date.gte.${since},date.is.null`)
+        .order('date', { ascending: false }),
+      15_000,
+    )
+    if (error) throw error
+    return (data as DbPost[]).map(postFromRow)
+  },
+
   async fetchAll(): Promise<Post[]> {
     const { data, error } = await withTimeout(
       supabase.from('posts').select('*').order('date', { ascending: false }),

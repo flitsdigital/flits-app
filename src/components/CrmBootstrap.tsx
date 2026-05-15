@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { useUIStore } from '../store/useUIStore'
 import { useRealtimeSync } from '../hooks/useRealtimeSync'
 import { NotificationsProvider } from '../contexts/NotificationsProvider'
+import { ProfilesProvider } from '../contexts/ProfilesProvider'
 import { TodosProvider } from '../contexts/TodosProvider'
 
 const TodoSheet = lazy(() => import('./TodoSheet').then((m) => ({ default: m.TodoSheet })))
@@ -33,15 +34,17 @@ export function CrmBootstrap() {
   }, [])
 
   return (
-    <NotificationsProvider>
-      <TodosProvider>
-        <Outlet />
+    <ProfilesProvider>
+      <NotificationsProvider>
+        <TodosProvider>
+          <Outlet />
         <Suspense fallback={null}>
           <TodoSheet />
           <InboxSheet />
           <GlobalSearchDialog />
         </Suspense>
-      </TodosProvider>
-    </NotificationsProvider>
+        </TodosProvider>
+      </NotificationsProvider>
+    </ProfilesProvider>
   )
 }

@@ -16,7 +16,7 @@ import { CommentThread } from '../components/projects/CommentThread'
 import { TaskSidebar } from '../components/projects/TaskSidebar'
 import { EmptyState } from '../components/EmptyState'
 import type { Task, Subtask, TaskStatus, TaskPriority, ProjectLabel, TimeEntry } from '../types'
-import type { UserProfileLite } from '../hooks/useProjectsData'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
@@ -27,11 +27,11 @@ export function TaskDetail() {
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const clients = useStore((s) => s.clients)
+  const { profiles } = useTeamProfiles()
 
   const [task, setTask] = useState<Task | null>(null)
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [comments, setComments] = useState<TaskComment[]>([])
-  const [profiles, setProfiles] = useState<UserProfileLite[]>([])
   const [sprints, setSprints] = useState<Sprint[]>([])
   const [labels, setLabels] = useState<ProjectLabel[]>([])
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
@@ -62,9 +62,8 @@ export function TaskDetail() {
     if (!taskId || !projectId) return
     setLoading(true)
     try {
-      const [full, profileList, sprintList, labelList, entries] = await Promise.all([
+      const [full, sprintList, labelList, entries] = await Promise.all([
         projectsDb.fetchTask(taskId),
-        projectsDb.fetchProfilesBasic(),
         projectsDb.fetchSprints(projectId),
         projectsDb.fetchProjectLabels(projectId),
         timeTrackingDb.fetchEntriesForTask(taskId),
@@ -74,7 +73,6 @@ export function TaskDetail() {
       setDescDraft(full.description ?? '')
       setSubtasks(full.subtasks)
       setComments(full.comments)
-      setProfiles(profileList)
       setSprints(sprintList)
       setLabels(labelList)
       setTimeEntries(entries)

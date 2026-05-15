@@ -17,7 +17,7 @@ import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { LEAD_STATUS_CONFIG } from '../lib/leadStatusConfig'
 import { notificationsDb } from '../lib/notificationsDb'
-import { projectsDb } from '../lib/projectsDb'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { leadsDb } from '../lib/leadsDb'
 import type { Lead, LeadStatus, ContactMomentType, Client, LeadAttachment } from '../types'
 import { Button } from '@/components/ui/button'
@@ -121,6 +121,7 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
   onAdded: (date: string) => void
 }) {
   const profile = useAuthStore((s) => s.profile)
+  const { profiles: teamProfiles } = useTeamProfiles()
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<ContactMomentType>('call')
   const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
@@ -145,10 +146,9 @@ function AddMomentForm({ leadId, addMoment, onAdded }: {
       // Process @mentions
       if (profile?.email) {
         try {
-          const allProfiles = await projectsDb.fetchProfilesBasic()
-          const emails = parseMentions(note.trim(), allProfiles)
+          const emails = parseMentions(note.trim(), teamProfiles)
           for (const email of emails) {
-            const target = allProfiles.find(p => p.email === email)
+            const target = teamProfiles.find((p) => p.email === email)
             if (!target) continue
             await notificationsDb.create({
               userId: target.id,

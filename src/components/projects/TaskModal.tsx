@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { nl } from 'date-fns/locale/nl'
 import { projectsDb, type TaskComment } from '../../lib/projectsDb'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useTeamProfiles } from '../../contexts/ProfilesProvider'
 import { notificationsDb } from '../../lib/notificationsDb'
 import { errorMessage } from '../../lib/errors'
 import { parseMentions, MentionTextarea } from '../MentionTextarea'
@@ -57,6 +58,7 @@ export function TaskModal({
   const [newComment, setNewComment] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
   const modalProfile = useAuthStore((s) => s.profile)
+  const { profiles: teamProfiles } = useTeamProfiles()
 
   useEffect(() => {
     if (isEdit) {
@@ -89,10 +91,9 @@ export function TaskModal({
       setComments((prev) => [...prev, comment])
       setNewComment('')
 
-      const allProfiles = await projectsDb.fetchProfilesBasic()
-      const emails = parseMentions(newComment.trim(), allProfiles)
+      const emails = parseMentions(newComment.trim(), teamProfiles)
       for (const email of emails) {
-        const target = allProfiles.find((p) => p.email === email)
+        const target = teamProfiles.find((p) => p.email === email)
         if (!target) continue
         await notificationsDb.create({
           userId: target.id,

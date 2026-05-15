@@ -56,7 +56,11 @@ import { ContentDayDetailPanel } from "../components/content/ContentDayDetailPan
 
 export function Content() {
   usePageMeta('Content → Flits Impact', 'Plan en beheer social media content voor al je klanten.')
-  const { posts, clients, addPost, updatePost, deletePost } = useStore();
+  const { posts, clients, addPost, updatePost, deletePost, ensureAllPosts } = useStore();
+
+  useEffect(() => {
+    void ensureAllPosts()
+  }, [ensureAllPosts])
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ContentViewMode>(() => (
     typeof window !== 'undefined' && window.matchMedia('(max-width: 1023.98px)').matches

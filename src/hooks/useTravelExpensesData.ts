@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react'
 import { travelExpensesDb } from '../lib/travelExpensesDb'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { useAuthStore } from '../store/useAuthStore'
 import type { TravelExpense, UserProfile } from '../types'
 
 export function useTravelExpensesData(isAdmin: boolean, selectedUserId: string | 'all') {
   const authReady = useAuthStore((s) => s.authReady)
   const sessionUserId = useAuthStore((s) => s.session?.user.id)
-  const [users, setUsers] = useState<UserProfile[]>([])
+  const { adminProfiles } = useTeamProfiles()
+  const users = isAdmin ? adminProfiles : []
   const [expenses, setExpenses] = useState<TravelExpense[]>([])
   const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!authReady || !sessionUserId || !isAdmin) return
-    travelExpensesDb.fetchUsers().then(setUsers).catch(() => setUsers([]))
-  }, [isAdmin, authReady, sessionUserId])
 
   async function load() {
     setLoading(true)

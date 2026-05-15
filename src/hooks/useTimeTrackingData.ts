@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { timeTrackingDb } from '../lib/timeTrackingDb'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 import { useAuthStore } from '../store/useAuthStore'
 import type { TimeEntry, TimeTag, UserProfile } from '../types'
 
@@ -8,7 +9,8 @@ export function useTimeTrackingData(isAdmin: boolean, selectedUserId: string | '
   const sessionUserId = useAuthStore((s) => s.session?.user.id)
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [tags, setTags] = useState<TimeTag[]>([])
-  const [users, setUsers] = useState<UserProfile[]>([])
+  const { adminProfiles } = useTeamProfiles()
+  const users = isAdmin ? adminProfiles : []
   const [loading, setLoading] = useState(true)
 
   const runningEntry = useMemo(() => entries.find((e) => e.isRunning) ?? null, [entries])
@@ -17,11 +19,6 @@ export function useTimeTrackingData(isAdmin: boolean, selectedUserId: string | '
     if (!authReady || !sessionUserId) return
     timeTrackingDb.fetchTags().then(setTags).catch(() => setTags([]))
   }, [authReady, sessionUserId])
-
-  useEffect(() => {
-    if (!authReady || !sessionUserId || !isAdmin) return
-    timeTrackingDb.fetchUsers().then(setUsers).catch(() => setUsers([]))
-  }, [isAdmin, authReady, sessionUserId])
 
   async function load() {
     setLoading(true)

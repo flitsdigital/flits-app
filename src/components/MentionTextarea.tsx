@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { fetchProfilesBasicCached } from '../lib/appCaches'
+import { useTeamProfiles } from '../contexts/ProfilesProvider'
 
 interface Profile {
   id: string
@@ -58,7 +58,7 @@ export function MentionTextarea({
   disabled,
   autoFocus,
 }: MentionTextareaProps) {
-  const [profiles, setProfiles] = useState<Profile[]>([])
+  const { profiles } = useTeamProfiles()
   const [query, setQuery] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
@@ -100,10 +100,6 @@ export function MentionTextarea({
       window.removeEventListener('scroll', onReposition, true)
     }
   }, [dropdownOpen, filtered.length, updateDropdownPosition, query, value])
-
-  useEffect(() => {
-    fetchProfilesBasicCached().then(setProfiles).catch(() => {})
-  }, [])
 
   function insertMention(profile: Profile) {
     if (!textareaRef.current) return

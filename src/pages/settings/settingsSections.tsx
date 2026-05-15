@@ -81,6 +81,7 @@ export function ProfielSection() {
       const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, optimized, {
         upsert: true,
         contentType: 'image/webp',
+        cacheControl: '3600',
       })
       if (uploadErr) throw uploadErr
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
