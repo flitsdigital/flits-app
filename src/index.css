@@ -97,6 +97,11 @@
     border-color: hsl(var(--border));
   }
 
+  /* Geen glow op focus — outline wordt per-component beheerd via border-kleur */
+  :focus-visible {
+    outline: none;
+  }
+
   html {
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
     font-size: 13px;

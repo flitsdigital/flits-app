@@ -10,12 +10,13 @@ export default {
   				'1': '#0d0d0d',
   				'2': '#141414',
   				'3': '#1a1a1a',
-  				'4': '#222222'
+  				'4': '#222222',
+  				card: '#111111',
   			},
   			border: {
-  				subtle: '#161616',
-  				default: '#2a2a2a',
-  				strong: '#3a3a3a'
+  				subtle: '#1e1e1e',
+  				default: '#2e2e2e',
+  				strong: '#404040'
   			},
   			text: {
   				primary: '#f0f0f2',
@@ -140,10 +141,10 @@ export default {
   			]
   		},
   		boxShadow: {
-  			subtle: '0 1px 2px rgba(0,0,0,0.4)',
-  			card: '0 2px 8px rgba(0,0,0,0.5)',
-  			modal: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
-  			dropdown: '0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)'
+  			subtle: '0 1px 2px rgba(0,0,0,0.5)',
+  			card: '0 1px 3px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+  			modal: '0 8px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.07)',
+  			dropdown: '0 4px 16px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07)'
   		},
   		borderRadius: {
   			sm: 'var(--radius-sm)',

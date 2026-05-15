@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Users, MoreHorizontal, Edit2 } from 'lucide-react'
+import { Plus, Users, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '../components/PageHeader'
 import { parseISO, differenceInDays, startOfDay } from 'date-fns'
@@ -15,11 +15,14 @@ import { ClientForm, type ClientFormSaveData } from '../components/ClientForm'
 import { ClientTypeBadge } from '../components/ClientTypeBadge'
 import type { Client, ClientType } from '../types'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { ArrowUpDown, ChevronDown } from 'lucide-react'
+import { SearchInput } from '../components/SearchInput'
+import { InitialsAvatar } from '../components/InitialsAvatar'
+import { ActionMenu } from '../components/ActionMenu'
+import { ListTable, ListHeader, SortButton, ListBody, ListEmpty } from '../components/ListTable'
 
 type SortKey = 'companyName' | 'nextInvoiceDate' | 'pricePerCycle' | 'status'
 type Filter = 'all' | 'active' | 'paused' | 'inactive'
@@ -174,19 +177,13 @@ export function Clients() {
   }
 
   function SortBtn({ k, label }: { k: SortKey; label: string }) {
-    const active = sortKey === k
     return (
-      <button
-        type="button"
+      <SortButton
+        label={label}
+        active={sortKey === k}
+        asc={sortAsc}
         onClick={() => toggleSort(k)}
-        className={cn(
-          'text-xs font-medium transition-colors',
-          active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
-        )}
-      >
-        {label}
-        {active ? (sortAsc ? ' ↑' : ' ↓') : ''}
-      </button>
+      />
     )
   }
 
@@ -281,15 +278,12 @@ export function Clients() {
         </div>
 
         <div className="flex items-center gap-2 lg:gap-3 mb-4 flex-wrap">
-          <div className="relative flex-1 min-w-[180px] lg:max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <Input
-              className="pl-8 bg-surface-2 border-border-subtle"
-              placeholder="Zoek klant..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Zoek klant…"
+            className="flex-1 min-w-[180px] lg:max-w-xs"
+          />
           <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
             <TabsList className="h-8">
               <TabsTrigger value="all" className="text-xs h-6 px-2.5">
@@ -340,26 +334,21 @@ export function Clients() {
           </DropdownMenu>
         </div>
 
-        <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
+        <ListTable>
           {/* Desktop kolomkoppen */}
-          <div className="hidden lg:grid grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px_60px] gap-3 px-4 py-2 border-b border-border-subtle">
-            <SortBtn k="companyName" label="Klant" />
-            <span className="text-xs font-medium text-text-muted">Soort</span>
-            <SortBtn k="status" label="Status" />
-            <span className="text-xs font-medium text-text-muted">Cyclus / termijn</span>
-            <SortBtn k="nextInvoiceDate" label="Volgende factuur" />
-            <SortBtn k="pricePerCycle" label="Prijs" />
-            <span />
-          </div>
+          <ListHeader className="hidden lg:flex grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px_60px]">
+            <div className="flex-[1.2] min-w-0"><SortBtn k="companyName" label="Klant" /></div>
+            <div className="w-[100px] shrink-0"><span className="text-xs text-text-muted">Soort</span></div>
+            <div className="w-[100px] shrink-0"><SortBtn k="status" label="Status" /></div>
+            <div className="w-[140px] shrink-0"><span className="text-xs text-text-muted">Cyclus / termijn</span></div>
+            <div className="w-[120px] shrink-0"><SortBtn k="nextInvoiceDate" label="Volgende factuur" /></div>
+            <div className="w-[60px] shrink-0"><SortBtn k="pricePerCycle" label="Prijs" /></div>
+            <div className="w-8 shrink-0" />
+          </ListHeader>
 
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <Users size={24} className="text-text-muted mb-2 opacity-40" />
-              <p className="text-xs text-text-muted">Geen klanten gevonden</p>
-            </div>
-          )}
+          {filtered.length === 0 && <ListEmpty text="Geen klanten gevonden" icon={Users} />}
 
-          <div className="divide-y divide-border-subtle">
+          <ListBody>
             {filtered.map((c) => {
               const st = statsById.get(c.id)
               const ct = c.clientType ?? 'recurring'
@@ -374,24 +363,22 @@ export function Clients() {
                   {/* ── Desktop rij ── */}
                   <Link
                     to={`/clients/${c.id}`}
-                    className="group hidden lg:grid grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px_60px] gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center"
+                    className="group hidden lg:flex gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-6 h-6 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-semibold text-accent-blue">{c.companyName.charAt(0)}</span>
-                      </div>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-[1.2]">
+                      <InitialsAvatar name={c.companyName} size="sm" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
                         <p className="text-xs text-text-muted truncate">{c.contactPerson}</p>
                       </div>
                     </div>
-                    <div>
+                    <div className="w-[100px] shrink-0">
                       <ClientTypeBadge type={c.clientType} />
                     </div>
-                    <div>
+                    <div className="w-[100px] shrink-0">
                       <StatusBadge status={c.status} />
                     </div>
-                    <div className="text-sm text-text-secondary">
+                    <div className="w-[140px] shrink-0 text-xs text-text-secondary">
                       {ct === 'recurring' && formatCycle(c.billingCycle, c.customCycleDays)}
                       {ct === 'project' && (
                         <span className="text-xs">
@@ -400,7 +387,7 @@ export function Clients() {
                       )}
                       {ct === 'oneoff' && <span className="text-xs">Eenmalig</span>}
                     </div>
-                    <div>
+                    <div className="w-[120px] shrink-0">
                       {c.status === 'active' ? (
                         ct === 'recurring' ? (
                           <div>
@@ -427,7 +414,7 @@ export function Clients() {
                         <span className="text-sm text-text-muted">—</span>
                       )}
                     </div>
-                    <div className="text-sm font-medium text-text-primary">
+                    <div className="w-[60px] shrink-0 text-sm font-medium text-text-primary">
                       {ct === 'recurring' && <>€{c.pricePerCycle.toLocaleString('nl-NL')}</>}
                       {ct === 'project' && (
                         <>
@@ -444,28 +431,8 @@ export function Clients() {
                       )}
                       {ct === 'oneoff' && <>€{(st?.singleInvoice?.amount ?? 0).toLocaleString('nl-NL')}</>}
                     </div>
-                    <div className="flex justify-end" onClick={(e) => e.preventDefault()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-text-muted opacity-0 group-hover:opacity-100"
-                          >
-                            <MoreHorizontal size={14} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditClient(c)
-                              setShowForm(true)
-                            }}
-                          >
-                            <Edit2 size={13} className="mr-2" /> Bewerken
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <div className="w-8 shrink-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.preventDefault()}>
+                      <ActionMenu items={[{ label: 'Bewerken', icon: Edit2, onClick: () => { setEditClient(c); setShowForm(true) } }]} />
                     </div>
                   </Link>
 
@@ -476,9 +443,7 @@ export function Clients() {
                       className="block px-4 py-3 hover:bg-white/[0.03] transition-colors"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-md bg-accent-blue/20 flex items-center justify-center shrink-0">
-                          <span className="text-sm font-semibold text-accent-blue">{c.companyName.charAt(0)}</span>
-                        </div>
+                        <InitialsAvatar name={c.companyName} size="md" />
                         <div className="flex-1 min-w-0 pr-8">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-medium text-text-primary truncate">{c.companyName}</p>
@@ -539,34 +504,14 @@ export function Clients() {
                       </div>
                     </Link>
                     <div className="absolute right-2 top-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-text-muted"
-                          >
-                            <MoreHorizontal size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditClient(c)
-                              setShowForm(true)
-                            }}
-                          >
-                            <Edit2 size={13} className="mr-2" /> Bewerken
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <ActionMenu items={[{ label: 'Bewerken', icon: Edit2, onClick: () => { setEditClient(c); setShowForm(true) } }]} />
                     </div>
                   </div>
                 </div>
               )
             })}
-          </div>
-        </div>
+          </ListBody>
+        </ListTable>
 
         <ClientForm
           open={showForm}

@@ -167,6 +167,28 @@ export function ProjectsTimeline({ projects, clients, onProjectClick }: Props) {
   // Today line offset
   const todayOffset = differenceInDays(startOfDay(new Date()), rangeStart)
 
+  // Scroll naar vandaag — herbruikbaar voor mount én knop
+  const scrollToToday = useCallback((smooth = false) => {
+    const el = containerRef.current
+    if (!el) return
+    const todayPx = LABEL_W + todayOffset * DAY_W + DAY_W / 2
+    const scrollTarget = Math.max(0, todayPx - el.clientWidth / 2)
+    if (smooth) {
+      el.scrollTo({ left: scrollTarget, behavior: 'smooth' })
+    } else {
+      el.scrollLeft = scrollTarget
+    }
+  }, [todayOffset, DAY_W])
+
+  // Scroll naar vandaag bij mount (eenmalig)
+  const hasScrolledToToday = useRef(false)
+  useEffect(() => {
+    if (!hasScrolledToToday.current) {
+      scrollToToday(false)
+      hasScrolledToToday.current = true
+    }
+  }, [scrollToToday])
+
   // Weekend columns (computed once per render)
   const weekendCols = useMemo(() =>
     Array.from({ length: totalDays }, (_, i) => {
@@ -547,7 +569,14 @@ export function ProjectsTimeline({ projects, clients, onProjectClick }: Props) {
           <span className="w-6 h-2 rounded-sm bg-white/10 border border-red-500/60" /> Verlopen
         </span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => scrollToToday(true)}
+            className="px-2 py-0.5 rounded border border-border-default text-[10px] text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors"
+          >
+            Vandaag
+          </button>
+          <span className="w-px h-3 bg-border-default" />
           <button
             onClick={() => setDayW(v => clampZoom(v - BUTTON_STEP))}
             disabled={dayW <= DAY_W_MIN}

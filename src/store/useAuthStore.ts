@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, withTimeout } from '../lib/supabase'
 import type { UserProfile } from '../types'
+import { useStore } from './useStore'
 
 const PROFILE_CACHE_KEY = 'flits-cached-profile'
 
@@ -9,6 +10,10 @@ interface AuthStore {
   session: Session | null
   profile: UserProfile | null
   loading: boolean
+  /** True only after initialize() has confirmed the session via getSession().
+   *  Unlike `loading`, this is never pre-set from cache — it guarantees the
+   *  Supabase JWT has been validated before any data fetches fire. */
+  authReady: boolean
   initialize: () => Promise<void>
   signIn: (email: string, password: string) => Promise<string | null>
   signOut: () => Promise<void>
@@ -83,6 +88,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
   session: cachedSession,
   profile: cachedProfile,
   loading: !cachedSession, // only show spinner on first-ever load
+  authReady: false, // set to true only after initialize() confirms via getSession()
 
   initialize: async () => {
     if (!authListenerRegistered) {
@@ -129,22 +135,36 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         const hasCached = !!get().profile
         if (hasCached) {
           // Show immediately, refresh profile silently
-          set({ session, loading: false })
+          set({ session, loading: false, authReady: true })
           fetchProfileById(session.user.id).then((profile) => {
             if (profile) set((s) => ({ ...s, profile }))
           })
         } else {
           const profile = await fetchProfileById(session.user.id)
-          set({ session, profile: profile ?? get().profile, loading: false })
+          set({ session, profile: profile ?? get().profile, loading: false, authReady: true })
         }
       } else {
         // No valid session — clear cache and send to login
         localStorage.removeItem(PROFILE_CACHE_KEY)
-        set({ session: null, profile: null, loading: false })
+        set({ session: null, profile: null, loading: false, authReady: true })
       }
     } catch (err) {
       console.warn('auth initialize timeout', err)
-      set((s) => (s.loading ? { ...s, loading: false } : s))
+      // getSession timed out — try a token refresh so subsequent RLS queries
+      // don't hang on a stale access_token before we mark authReady.
+      try {
+        const { data: { session: refreshed } } = await withTimeout(
+          supabase.auth.refreshSession(),
+          6_000,
+        )
+        if (refreshed) {
+          set({ session: refreshed, loading: false, authReady: true })
+        } else {
+          set((s) => ({ ...(s.loading ? { ...s, loading: false } : s), authReady: true }))
+        }
+      } catch {
+        set((s) => ({ ...(s.loading ? { ...s, loading: false } : s), authReady: true }))
+      }
     } finally {
       clearTimeout(safety)
     }
@@ -158,6 +178,13 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut()
     localStorage.removeItem(PROFILE_CACHE_KEY)
+    useStore.setState({
+      clients: [],
+      posts: [],
+      clientInvoices: [],
+      initialized: false,
+      error: null,
+    })
     set({ session: null, profile: null })
   },
 

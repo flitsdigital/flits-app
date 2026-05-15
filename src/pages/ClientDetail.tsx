@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -24,7 +23,7 @@ import {
   Share2,
   Check,
   FolderKanban,
-  ArrowRight,
+  FileText,
 } from "lucide-react";
 import { parseISO, format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -37,6 +36,11 @@ import { ClientForm } from "../components/ClientForm";
 import { ClientTypeBadge } from "../components/ClientTypeBadge";
 import { ClientBillingSection } from "../components/ClientBillingSection";
 import { PostForm } from "../components/PostForm";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { InitialsAvatar } from "../components/InitialsAvatar";
+import { PageSection } from "../components/PageSection";
+import { ActionMenu } from "../components/ActionMenu";
+import { EmptyState } from "../components/EmptyState";
 import {
   postTypeLabel,
   postStatusLabel,
@@ -53,6 +57,7 @@ const TYPE_ICON: Record<PostType, React.ElementType> = {
   carousel: Layers,
 };
 
+// ── Info row ──────────────────────────────────────────────────────────────────
 function InfoRow({
   icon: Icon,
   label,
@@ -64,16 +69,26 @@ function InfoRow({
 }) {
   if (!value) return null;
   return (
-    <div className="flex items-start gap-3">
-      <Icon size={15} className="text-text-muted mt-0.5 shrink-0" />
-      <div>
-        <p className="text-xs text-text-muted">{label}</p>
-        <p className="text-sm text-text-primary mt-0.5">{value}</p>
+    <div className="flex items-start gap-3 py-2.5 border-b border-border-subtle/40 last:border-0">
+      <Icon size={14} className="text-text-muted mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] text-text-disabled uppercase tracking-wide font-medium">{label}</p>
+        <p className="text-sm text-text-primary mt-0.5 break-words">{value}</p>
       </div>
     </div>
   );
 }
 
+// ── Stat pill ─────────────────────────────────────────────────────────────────
+function StatPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded bg-surface-3 border border-border-subtle text-text-muted">
+      {children}
+    </span>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -100,32 +115,30 @@ export function ClientDetail() {
   const stats = useClientStatsForClient(client);
 
   useEffect(() => {
-    if (!client) return
-    setProjectsLoading(true)
-    projectsDb.fetchProjectsForClient(client.id)
+    if (!client) return;
+    setProjectsLoading(true);
+    projectsDb
+      .fetchProjectsForClient(client.id)
       .then(async (projects) => {
-        setClientProjects(projects)
-        const counts: Record<string, number> = {}
+        setClientProjects(projects);
+        const counts: Record<string, number> = {};
         await Promise.all(
           projects.map(async (p) => {
-            const tasks = await projectsDb.fetchProjectTasks(p.id)
-            counts[p.id] = tasks.length
-          })
-        )
-        setProjectTaskCounts(counts)
+            const tasks = await projectsDb.fetchProjectTasks(p.id);
+            counts[p.id] = tasks.length;
+          }),
+        );
+        setProjectTaskCounts(counts);
       })
       .catch(console.error)
-      .finally(() => setProjectsLoading(false))
-  }, [client?.id])
+      .finally(() => setProjectsLoading(false));
+  }, [client?.id]);
 
   if (!client) {
     return (
-      <div className="px-8 py-8 text-center">
-        <p className="text-text-muted">Klant niet gevonden.</p>
-        <Link
-          to="/clients"
-          className="text-accent-blue text-sm mt-2 inline-block"
-        >
+      <div className="px-8 py-12 text-center">
+        <p className="text-text-muted text-sm">Klant niet gevonden.</p>
+        <Link to="/clients" className="text-accent-blue text-sm mt-2 inline-block hover:underline">
           ← Terug naar klanten
         </Link>
       </div>
@@ -147,8 +160,7 @@ export function ClientDetail() {
       await navigator.clipboard.writeText(link);
       setCopiedPostId(postId);
       window.setTimeout(
-        () =>
-          setCopiedPostId((current) => (current === postId ? null : current)),
+        () => setCopiedPostId((cur) => (cur === postId ? null : cur)),
         1800,
       );
     } catch {
@@ -157,6 +169,12 @@ export function ClientDetail() {
   }
 
   const ct = client.clientType ?? "recurring";
+
+  const PROJECT_STATUS: Record<string, { label: string; cls: string }> = {
+    active:    { label: "Actief",     cls: "text-green-400 bg-green-500/10 border-green-500/25" },
+    paused:    { label: "Gepauzeerd", cls: "text-amber-400 bg-amber-500/10 border-amber-500/25" },
+    completed: { label: "Afgerond",   cls: "text-zinc-400  bg-zinc-500/10  border-zinc-500/25" },
+  };
 
   return (
     <div>
@@ -167,488 +185,410 @@ export function ClientDetail() {
           { label: client.companyName },
         ]}
       />
-      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-accent-blue/20 flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold text-accent-blue">
-                {client.companyName.charAt(0)}
-              </span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-base font-semibold text-text-primary truncate">
-                {client.companyName}
-              </h1>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <ClientTypeBadge type={client.clientType} />
-                <StatusBadge status={client.status} />
-                {client.packageType && (
-                  <span className="text-xs text-text-muted truncate">{client.packageType}</span>
+
+      <div className="px-4 lg:px-6 py-4 lg:py-5 max-w-5xl mx-auto space-y-5">
+
+        {/* ── Hero header card ── */}
+        <div className="rounded-xl border border-border-subtle bg-surface-card shadow-card p-4 lg:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            {/* Left: avatar + info */}
+            <div className="flex items-start gap-3.5 min-w-0">
+              <InitialsAvatar name={client.companyName} size="lg" />
+              <div className="min-w-0">
+                <h1 className="text-base font-semibold text-text-primary leading-tight">
+                  {client.companyName}
+                </h1>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <ClientTypeBadge type={client.clientType} />
+                  <StatusBadge status={client.status} />
+                  {client.packageType && (
+                    <span className="text-xs text-text-muted">{client.packageType}</span>
+                  )}
+                </div>
+                {stats && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
+                      <>
+                        <StatPill>Volgende: {formatWeek(client.nextInvoiceDate)} {formatWeekDate(client.nextInvoiceDate)}</StatPill>
+                        <StatPill>€{client.pricePerCycle.toLocaleString("nl-NL")} / cyclus</StatPill>
+                      </>
+                    )}
+                    {ct === "project" && stats.progress && (
+                      <>
+                        <StatPill>Voortgang {stats.progress.pct}% ({stats.progress.paidCount}/{stats.progress.totalCount} termijnen)</StatPill>
+                        <StatPill>Open €{stats.openAmount.toLocaleString("nl-NL")}</StatPill>
+                      </>
+                    )}
+                    {ct === "oneoff" && stats.singleInvoice && (
+                      <StatPill>
+                        €{stats.singleInvoice.amount.toLocaleString("nl-NL")} — {formatDate(stats.singleInvoice.dueDate)} ({stats.singleInvoice.status})
+                      </StatPill>
+                    )}
+                    <StatPill>{stats.postsThisWeek} posts deze week</StatPill>
+                  </div>
                 )}
               </div>
-              {stats && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
-                    <>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                        Volgende: {formatWeek(client.nextInvoiceDate)}{" "}
-                        {formatWeekDate(client.nextInvoiceDate)}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                        €{client.pricePerCycle.toLocaleString("nl-NL")} / cyclus
-                      </span>
-                    </>
-                  )}
-                  {ct === "project" && stats.progress && (
-                    <>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                        Voortgang {stats.progress.pct}% ({stats.progress.paidCount}/{stats.progress.totalCount}{" "}
-                        termijnen)
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                        Open €{stats.openAmount.toLocaleString("nl-NL")}
-                      </span>
-                    </>
-                  )}
-                  {ct === "oneoff" && stats.singleInvoice && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                      €{stats.singleInvoice.amount.toLocaleString("nl-NL")} —{" "}
-                      {formatDate(stats.singleInvoice.dueDate)} ({stats.singleInvoice.status})
-                    </span>
-                  )}
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-3 border border-border-subtle text-text-muted">
-                    {stats.postsThisWeek} posts deze week
-                  </span>
-                </div>
-              )}
             </div>
-          </div>
-          <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing(true)}
-              className="h-8 lg:h-7 text-xs gap-1.5"
-            >
-              <Edit2 size={13} />
-              <span className="hidden sm:inline">Bewerken</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setConfirmDelete(true)}
-              className="h-8 w-8 lg:h-7 lg:w-7 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25"
-            >
-              <Trash2 size={13} />
-            </Button>
+
+            {/* Right: actions */}
+            <div className="flex items-center gap-2 self-start shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="h-7 text-xs gap-1.5">
+                <Edit2 size={12} />
+                Bewerken
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setConfirmDelete(true)}
+                className="h-7 w-7 text-text-muted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/25"
+              >
+                <Trash2 size={13} />
+              </Button>
+            </div>
           </div>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-          <TabsList className="h-9 w-full sm:w-auto justify-start overflow-x-auto scrollbar-none">
-            <TabsTrigger value="overview" className="text-xs shrink-0">
-              Overzicht
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="text-xs shrink-0">
-              Facturatie
-            </TabsTrigger>
-            <TabsTrigger value="content" className="text-xs shrink-0">
+        {/* ── Tabs ── */}
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="h-8 bg-surface-2 border border-border-subtle p-0.5 gap-0.5">
+            <TabsTrigger value="overview" className="text-xs h-7 px-3">Overzicht</TabsTrigger>
+            <TabsTrigger value="billing" className="text-xs h-7 px-3">Facturatie</TabsTrigger>
+            <TabsTrigger value="content" className="text-xs h-7 px-3 gap-1.5">
               Content
+              {clientPosts.length > 0 && (
+                <span className="text-[10px] bg-surface-3 border border-border-default px-1.5 rounded text-text-muted font-normal">
+                  {clientPosts.length}
+                </span>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="projects" className="text-xs shrink-0 gap-1.5">
-              <FolderKanban size={12} />
+            <TabsTrigger value="projects" className="text-xs h-7 px-3 gap-1.5">
+              <FolderKanban size={11} />
               Projecten
               {clientProjects.length > 0 && (
-                <span className="ml-0.5 text-[10px] bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md text-text-muted font-normal">
+                <span className="text-[10px] bg-surface-3 border border-border-default px-1.5 rounded text-text-muted font-normal">
                   {clientProjects.length}
                 </span>
               )}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-5">
-                {client.notes ? (
-                  <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-                    <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-                      Notities
-                    </h2>
-                    <p className="text-sm text-text-secondary whitespace-pre-line">{client.notes}</p>
+          {/* ── Overview tab ── */}
+          <TabsContent value="overview" className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left column */}
+              <div className="space-y-4">
+                <PageSection title="Notities" icon={FileText}>
+                  <div className="px-4 py-3">
+                    {client.notes ? (
+                      <p className="text-sm text-text-secondary whitespace-pre-line leading-relaxed">
+                        {client.notes}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-text-disabled italic">Geen notities.</p>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-surface-2 border border-border-subtle rounded-xl p-5 text-xs text-text-muted">
-                    Geen notities.
-                  </div>
-                )}
+                </PageSection>
+
                 {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
-                  <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-                    <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-                      Volgende factuur
-                    </h2>
-                    <p className="text-sm font-medium text-text-primary">
-                      {formatWeek(client.nextInvoiceDate)} — {formatWeekDate(client.nextInvoiceDate)}
-                    </p>
-                    <div className="mt-2">
+                  <PageSection title="Volgende factuur" icon={CalendarDays}>
+                    <div className="px-4 py-3 space-y-2">
+                      <p className="text-sm font-medium text-text-primary">
+                        {formatWeek(client.nextInvoiceDate)} — {formatWeekDate(client.nextInvoiceDate)}
+                      </p>
                       <InvoiceBadge
                         status={
-                          stats?.recurringStatus === "overdue"
-                            ? "overdue"
-                            : stats?.recurringStatus === "this_week"
-                              ? "this_week"
-                              : stats?.recurringStatus === "upcoming"
-                                ? "upcoming"
-                                : "ok"
+                          stats?.recurringStatus === "overdue" ? "overdue" :
+                          stats?.recurringStatus === "this_week" ? "this_week" :
+                          stats?.recurringStatus === "upcoming" ? "upcoming" : "ok"
                         }
                       />
                     </div>
-                  </div>
+                  </PageSection>
                 )}
               </div>
-              <div className="space-y-5">
-                <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-                  <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-                    Contact
-                  </h2>
-                  <div className="space-y-3.5">
+
+              {/* Right column */}
+              <div className="space-y-4">
+                <PageSection title="Contact" icon={Mail}>
+                  <div className="px-4 py-1">
                     <InfoRow icon={Mail} label="E-mail" value={client.email} />
                     <InfoRow icon={Phone} label="Telefoon" value={client.phone} />
                     <InfoRow icon={MapPin} label="Adres" value={client.address} />
                     <InfoRow icon={Receipt} label="BTW nummer" value={client.vatNumber} />
                   </div>
-                </div>
-                <div className="bg-surface-2 border border-border-subtle rounded-xl p-5">
-                  <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-                    Contract
-                  </h2>
-                  <div className="space-y-3.5">
-                    <InfoRow
-                      icon={CalendarDays}
-                      label="Startdatum"
-                      value={formatDate(client.startDate)}
-                    />
+                </PageSection>
+
+                <PageSection title="Contract" icon={Receipt}>
+                  <div className="px-4 py-1">
+                    <InfoRow icon={CalendarDays} label="Startdatum" value={formatDate(client.startDate)} />
                     {client.endDate && (
-                      <InfoRow
-                        icon={CalendarDays}
-                        label="Einddatum"
-                        value={formatDate(client.endDate)}
-                      />
+                      <InfoRow icon={CalendarDays} label="Einddatum" value={formatDate(client.endDate)} />
                     )}
                     <InfoRow icon={Package} label="Pakket" value={client.packageType} />
                     {ct === "recurring" && (
-                      <div className="flex items-start gap-3">
-                        <Receipt size={15} className="text-text-muted mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs text-text-muted">Facturatiecyclus</p>
-                          <p className="text-sm text-text-primary mt-0.5">
-                            {formatCycle(client.billingCycle, client.customCycleDays)}
-                          </p>
-                        </div>
-                      </div>
+                      <InfoRow
+                        icon={Receipt}
+                        label="Facturatiecyclus"
+                        value={formatCycle(client.billingCycle, client.customCycleDays)}
+                      />
                     )}
                     {ct === "project" && (
                       <>
                         <InfoRow
                           icon={Receipt}
                           label="Projectbudget"
-                          value={
-                            client.projectBudget != null
-                              ? `€${client.projectBudget.toLocaleString("nl-NL")}`
-                              : undefined
-                          }
+                          value={client.projectBudget != null ? `€${client.projectBudget.toLocaleString("nl-NL")}` : undefined}
                         />
-                        <InfoRow
-                          icon={CalendarDays}
-                          label="Deadline"
-                          value={formatDate(client.projectDeadline)}
-                        />
+                        <InfoRow icon={CalendarDays} label="Deadline" value={formatDate(client.projectDeadline)} />
                       </>
                     )}
                   </div>
-                </div>
+                </PageSection>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="billing" className="mt-0">
+          {/* ── Billing tab ── */}
+          <TabsContent value="billing" className="mt-4">
             <ClientBillingSection client={client} />
           </TabsContent>
 
-          <TabsContent value="content" className="mt-0">
-            <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
-                <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                  Content
-                  <span className="ml-2 text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md font-normal normal-case tracking-normal">
-                    {clientPosts.length} posts
-                  </span>
-                </h2>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditingPost(null);
-                    setPostFormOpen(true);
-                  }}
-                  className="h-7 text-xs gap-1.5"
-                >
-                  <Plus size={13} />
-                  Post toevoegen
+          {/* ── Content tab ── */}
+          <TabsContent value="content" className="mt-4">
+            <PageSection
+              title="Content"
+              count={clientPosts.length}
+              icon={Image}
+              action={
+                <Button size="sm" onClick={() => { setEditingPost(null); setPostFormOpen(true); }} className="h-6 text-xs gap-1">
+                  <Plus size={11} />
+                  Toevoegen
                 </Button>
-              </div>
-
-              {clientPosts.length === 0 && (
-                <div className="px-4 py-8 text-center text-xs text-text-muted">
-                  Nog geen posts. Voeg de eerste toe.
-                </div>
-              )}
-
-              <div className="divide-y divide-border-subtle">
-                {clientPosts.map((post) => {
-                  const Icon = TYPE_ICON[post.type];
-                  const primaryMediaUrl = post.mediaUrls?.[0] ?? post.mediaUrl;
-                  const mediaCount = post.mediaUrls?.length ?? (post.mediaUrl ? 1 : 0);
-                  return (
-                    <div
-                      key={post.id}
-                      className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors group"
-                    >
-                      <div className="w-6 h-6 rounded bg-surface-3 border border-border-subtle flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon size={12} className="text-text-muted" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-md border ${postStatusColor[post.status]}`}
-                          >
-                            {postStatusLabel(post.status)}
-                          </span>
-                          <span className="text-xs text-text-muted">{postTypeLabel(post.type)}</span>
-                          {post.date && (
-                            <span className="text-xs text-text-muted">
-                              · {format(parseISO(post.date), "d MMM yyyy", { locale: nl })}
+              }
+            >
+              {clientPosts.length === 0 ? (
+                <EmptyState
+                  variant="inline"
+                  icon={Image}
+                  title="Nog geen posts"
+                  description="Voeg de eerste post toe voor deze klant."
+                  action={{ label: "Post toevoegen", onClick: () => { setEditingPost(null); setPostFormOpen(true); } }}
+                />
+              ) : (
+                <div className="divide-y divide-border-subtle/60">
+                  {clientPosts.map((post) => {
+                    const Icon = TYPE_ICON[post.type];
+                    const primaryMediaUrl = post.mediaUrls?.[0] ?? post.mediaUrl;
+                    const mediaCount = post.mediaUrls?.length ?? (post.mediaUrl ? 1 : 0);
+                    return (
+                      <div
+                        key={post.id}
+                        className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.025] transition-colors group"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-surface-3 border border-border-subtle flex items-center justify-center shrink-0 mt-0.5">
+                          <Icon size={12} className="text-text-muted" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${postStatusColor[post.status]}`}>
+                              {postStatusLabel(post.status)}
                             </span>
+                            <span className="text-xs text-text-muted">{postTypeLabel(post.type)}</span>
+                            {post.date && (
+                              <span className="text-xs text-text-disabled">
+                                {format(parseISO(post.date), "d MMM yyyy", { locale: nl })}
+                              </span>
+                            )}
+                          </div>
+                          {post.caption && (
+                            <p className="text-sm text-text-secondary line-clamp-2 mt-0.5">{post.caption}</p>
+                          )}
+                          {primaryMediaUrl && (
+                            <a
+                              href={primaryMediaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline mt-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink size={10} />
+                              {post.type === "carousel" && mediaCount > 1
+                                ? `${mediaCount} afbeeldingen`
+                                : "Media bekijken"}
+                            </a>
                           )}
                         </div>
-                        {post.caption && (
-                          <p className="text-sm text-text-secondary line-clamp-2">{post.caption}</p>
-                        )}
-                        {primaryMediaUrl && (
-                          <a
-                            href={primaryMediaUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-accent-blue hover:underline mt-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ExternalLink size={11} />
-                            {post.type === "carousel" && mediaCount > 1
-                              ? `${mediaCount} afbeeldingen`
-                              : "Media bekijken"}
-                          </a>
-                        )}
+
+                        <ActionMenu
+                          items={[
+                            {
+                              label: copiedPostId === post.id ? "Gekopieerd!" : "Preview link kopiëren",
+                              icon: copiedPostId === post.id ? Check : Share2,
+                              onClick: () => copyPreviewLink(post.id),
+                            },
+                            {
+                              label: "Bewerken",
+                              icon: Edit2,
+                              onClick: () => { setEditingPost(post); setPostFormOpen(true); },
+                            },
+                            { separator: true, label: "", onClick: () => {} },
+                            {
+                              label: "Verwijderen",
+                              icon: Trash2,
+                              onClick: () => deletePost(post.id),
+                              variant: "destructive",
+                            },
+                          ]}
+                        />
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => copyPreviewLink(post.id)}
-                          className="p-1.5 rounded-md hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors"
-                          title="Share preview"
-                        >
-                          {copiedPostId === post.id ? <Check size={13} /> : <Share2 size={13} />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingPost(post);
-                            setPostFormOpen(true);
-                          }}
-                          className="p-1.5 rounded-md hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-colors"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deletePost(post.id)}
-                          className="p-1.5 rounded-md hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </PageSection>
           </TabsContent>
 
-          <TabsContent value="projects" className="mt-0">
-            <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
-                <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                  Projecten
-                  {clientProjects.length > 0 && (
-                    <span className="ml-2 text-text-muted bg-surface-3 border border-border-subtle px-1.5 py-0.5 rounded-md font-normal normal-case tracking-normal">
-                      {clientProjects.length}
-                    </span>
-                  )}
-                </h2>
-                <Link
-                  to="/projects"
-                  className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors"
-                >
-                  Alle projecten
-                  <ArrowRight size={11} />
-                </Link>
-              </div>
-
+          {/* ── Projects tab ── */}
+          <TabsContent value="projects" className="mt-4">
+            <PageSection
+              title="Projecten"
+              count={clientProjects.length || undefined}
+              icon={FolderKanban}
+              to="/projects"
+            >
               {projectsLoading && (
                 <div className="px-4 py-8 text-center text-xs text-text-muted">Laden…</div>
               )}
 
               {!projectsLoading && clientProjects.length === 0 && (
-                <div className="px-4 py-8 text-center text-xs text-text-muted">
-                  Geen projecten gekoppeld aan deze klant.
-                </div>
+                <EmptyState
+                  variant="inline"
+                  icon={FolderKanban}
+                  title="Geen projecten"
+                  description="Er zijn geen projecten gekoppeld aan deze klant."
+                />
               )}
 
               {!projectsLoading && clientProjects.length > 0 && (
-                <div className="divide-y divide-border-subtle">
+                <div className="divide-y divide-border-subtle/60">
                   {clientProjects.map((project) => {
-                    const taskCount = projectTaskCounts[project.id] ?? 0
-                    const statusConfig = {
-                      active:    { label: 'Actief',     cls: 'text-green-400 bg-green-500/10 border-green-500/25' },
-                      paused:    { label: 'Gepauzeerd', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25' },
-                      completed: { label: 'Afgerond',   cls: 'text-zinc-400  bg-zinc-500/10  border-zinc-500/25' },
-                    }[project.status]
+                    const taskCount = projectTaskCounts[project.id] ?? 0;
+                    const sc = PROJECT_STATUS[project.status] ?? PROJECT_STATUS.active;
                     return (
                       <div
                         key={project.id}
-                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.025] transition-colors"
                       >
                         <div
-                          className="w-2.5 h-2.5 rounded-sm shrink-0"
-                          style={{ backgroundColor: project.color ?? '#3b82f6' }}
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: project.color ?? "#3b82f6" }}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-text-primary truncate">{project.name}</p>
                           {project.description && (
-                            <p className="text-xs text-text-muted truncate mt-0.5">{project.description}</p>
+                            <p className="text-xs text-text-muted truncate">{project.description}</p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-text-muted tabular-nums">
-                            {taskCount} {taskCount === 1 ? 'taak' : 'taken'}
+                          <span className="text-xs text-text-disabled tabular-nums">
+                            {taskCount} {taskCount === 1 ? "taak" : "taken"}
                           </span>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${statusConfig.cls}`}>
-                            {statusConfig.label}
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${sc.cls}`}>
+                            {sc.label}
                           </span>
                         </div>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
-            </div>
+            </PageSection>
           </TabsContent>
         </Tabs>
-
-        <ClientForm
-          open={editing}
-          onClose={() => setEditing(false)}
-          onConfirmTypeChange={async (from: ClientType, to: ClientType) => {
-            if (from === to) return true;
-            if (from === "recurring" && (to === "project" || to === "oneoff")) {
-              return window.confirm(
-                "Je schakelt over van cyclus-facturatie naar project/eenmalig. Cyclus-gegevens worden niet meer gebruikt. Doorgaan?",
-              );
-            }
-            if ((from === "project" || from === "oneoff") && to === "recurring") {
-              return window.confirm(
-                "Je schakelt over naar retainer/cyclus. Controleer facturatiecyclus en prijs in de volgende stap. Doorgaan?",
-              );
-            }
-            return true;
-          }}
-          onSave={async (data) => {
-            const { pendingInvoices, ...rest } = data;
-            const patch = {
-              ...rest,
-              ...(rest.clientType !== "recurring" ? { invoiceRecords: [] as Client["invoiceRecords"] } : {}),
-            };
-            await updateClient(client.id, patch);
-            if (pendingInvoices?.length) {
-              const { addClientInvoice } = useStore.getState();
-              for (const p of pendingInvoices) {
-                await addClientInvoice({ ...p, clientId: client.id });
-              }
-            }
-            toast.success("Klant bijgewerkt");
-            setEditing(false);
-          }}
-          initial={client}
-          title="Klant bewerken"
-        />
-
-        <PostForm
-          open={postFormOpen}
-          onClose={() => {
-            setPostFormOpen(false);
-            setEditingPost(null);
-          }}
-          onSave={async (data) => {
-            if (editingPost) {
-              await updatePost(editingPost.id, data);
-              toast.success("Post opgeslagen");
-            } else {
-              const created = await addPost(data);
-              toast.success("Post aangemaakt");
-              setEditingPost(created);
-            }
-          }}
-          onDelete={
-            editingPost
-              ? async () => {
-                  await deletePost(editingPost.id);
-                  toast.success("Post verwijderd");
-                  setPostFormOpen(false);
-                  setEditingPost(null);
-                }
-              : undefined
-          }
-          onDuplicate={async (data) => {
-            await addPost(data);
-            toast.success("Post gedupliceerd");
-          }}
-          initial={editingPost ?? undefined}
-          clientId={client.id}
-          clients={[client]}
-          lockClient
-          sharePostId={editingPost?.id}
-          title={editingPost ? "Post bewerken" : "Post toevoegen"}
-        />
-
-        <Dialog open={confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(false)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Klant verwijderen?</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground -mt-2">
-              Weet je zeker dat je{" "}
-              <strong className="text-foreground">{client.companyName}</strong> wilt verwijderen? Dit kan niet
-              ongedaan worden gemaakt.
-            </p>
-            <div className="flex gap-3 mt-2">
-              <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
-                Annuleren
-              </Button>
-              <Button variant="destructive" onClick={handleDelete} className="flex-1">
-                Verwijderen
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      {/* ── Modals ── */}
+      <ClientForm
+        open={editing}
+        onClose={() => setEditing(false)}
+        onConfirmTypeChange={async (from: ClientType, to: ClientType) => {
+          if (from === to) return true;
+          if (from === "recurring" && (to === "project" || to === "oneoff")) {
+            return window.confirm(
+              "Je schakelt over van cyclus-facturatie naar project/eenmalig. Cyclus-gegevens worden niet meer gebruikt. Doorgaan?",
+            );
+          }
+          if ((from === "project" || from === "oneoff") && to === "recurring") {
+            return window.confirm(
+              "Je schakelt over naar retainer/cyclus. Controleer facturatiecyclus en prijs in de volgende stap. Doorgaan?",
+            );
+          }
+          return true;
+        }}
+        onSave={async (data) => {
+          const { pendingInvoices, ...rest } = data;
+          const patch = {
+            ...rest,
+            ...(rest.clientType !== "recurring" ? { invoiceRecords: [] as Client["invoiceRecords"] } : {}),
+          };
+          await updateClient(client.id, patch);
+          if (pendingInvoices?.length) {
+            const { addClientInvoice } = useStore.getState();
+            for (const p of pendingInvoices) {
+              await addClientInvoice({ ...p, clientId: client.id });
+            }
+          }
+          toast.success("Klant bijgewerkt");
+          setEditing(false);
+        }}
+        initial={client}
+        title="Klant bewerken"
+      />
+
+      <PostForm
+        open={postFormOpen}
+        onClose={() => { setPostFormOpen(false); setEditingPost(null); }}
+        onSave={async (data) => {
+          if (editingPost) {
+            await updatePost(editingPost.id, data);
+            toast.success("Post opgeslagen");
+          } else {
+            const created = await addPost(data);
+            toast.success("Post aangemaakt");
+            setEditingPost(created);
+          }
+        }}
+        onDelete={
+          editingPost
+            ? async () => {
+                await deletePost(editingPost.id);
+                toast.success("Post verwijderd");
+                setPostFormOpen(false);
+                setEditingPost(null);
+              }
+            : undefined
+        }
+        onDuplicate={async (data) => {
+          await addPost(data);
+          toast.success("Post gedupliceerd");
+        }}
+        initial={editingPost ?? undefined}
+        clientId={client.id}
+        clients={[client]}
+        lockClient
+        sharePostId={editingPost?.id}
+        title={editingPost ? "Post bewerken" : "Post toevoegen"}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Klant verwijderen?"
+        itemName={client.companyName}
+        destructive
+        confirmLabel="Verwijderen"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

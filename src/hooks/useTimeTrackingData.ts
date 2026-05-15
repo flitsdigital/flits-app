@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { timeTrackingDb } from '../lib/timeTrackingDb'
+import { useAuthStore } from '../store/useAuthStore'
 import type { TimeEntry, TimeTag, UserProfile } from '../types'
 
 export function useTimeTrackingData(isAdmin: boolean, selectedUserId: string | 'all') {
+  const authReady = useAuthStore((s) => s.authReady)
+  const sessionUserId = useAuthStore((s) => s.session?.user.id)
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [tags, setTags] = useState<TimeTag[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -11,13 +14,14 @@ export function useTimeTrackingData(isAdmin: boolean, selectedUserId: string | '
   const runningEntry = useMemo(() => entries.find((e) => e.isRunning) ?? null, [entries])
 
   useEffect(() => {
+    if (!authReady || !sessionUserId) return
     timeTrackingDb.fetchTags().then(setTags).catch(() => setTags([]))
-  }, [])
+  }, [authReady, sessionUserId])
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!authReady || !sessionUserId || !isAdmin) return
     timeTrackingDb.fetchUsers().then(setUsers).catch(() => setUsers([]))
-  }, [isAdmin])
+  }, [isAdmin, authReady, sessionUserId])
 
   async function load() {
     setLoading(true)
@@ -31,7 +35,10 @@ export function useTimeTrackingData(isAdmin: boolean, selectedUserId: string | '
     }
   }
 
-  useEffect(() => { load() }, [selectedUserId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!authReady || !sessionUserId) return
+    load()
+  }, [selectedUserId, isAdmin, authReady, sessionUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reloadTags() {
     const data = await timeTrackingDb.fetchTags()

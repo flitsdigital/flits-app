@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Trash2, Phone, Mail, Globe, Users, MessageSquare, Calendar, ArrowRight, ChevronDown, Paperclip, Upload, FileText, X, Download } from 'lucide-react'
+import { Trash2, Phone, Mail, Users, MessageSquare, Calendar, ArrowRight, ChevronDown, Paperclip, Upload, FileText, X, Download, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -8,6 +8,9 @@ import { PageHeader } from '../components/PageHeader'
 import { LeadForm } from '../components/LeadForm'
 import { ClientForm } from '../components/ClientForm'
 import { MentionTextarea, parseMentions } from '../components/MentionTextarea'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { InitialsAvatar } from '../components/InitialsAvatar'
+import { PageSection } from '../components/PageSection'
 import { useLeadsData, useContactMoments } from '../hooks/useLeadsData'
 import { useAuthStore } from '../store/useAuthStore'
 import { useStore } from '../store/useStore'
@@ -21,7 +24,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -98,8 +100,8 @@ function StatusDropdown({ status, onChange }: { status: LeadStatus; onChange: (s
 function InfoRow({ label, value, href }: { label: string; value?: string | null; href?: string }) {
   if (!value) return null
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-text-muted">{label}</span>
+    <div className="flex flex-col gap-0.5 py-2 border-b border-border-subtle/40 last:border-0">
+      <span className="text-[10px] text-text-disabled uppercase tracking-wide font-medium">{label}</span>
       {href ? (
         <a href={href} target="_blank" rel="noreferrer" className="text-sm text-accent-blue hover:underline truncate">
           {value}
@@ -328,7 +330,7 @@ function LeadAttachments({ leadId, userId }: { leadId: string; userId?: string }
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
           onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
-          className={cn('space-y-1.5', dragging && attachments.length > 0 && 'ring-2 ring-accent-blue/30 rounded-lg p-1')}
+          className={cn('space-y-1.5', dragging && attachments.length > 0 && 'border border-accent-blue/30 rounded-lg p-1')}
         >
           {attachments.map(a => (
             <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 bg-surface-3 rounded-lg group">
@@ -448,6 +450,7 @@ export function LeadDetail() {
 
   const [showEditForm, setShowEditForm] = useState(false)
   const [showClientForm, setShowClientForm] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [notesValue, setNotesValue] = useState('')
   const [notesSaving, setNotesSaving] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -479,7 +482,6 @@ export function LeadDetail() {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`${lead?.companyName} verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return
     await deleteLead(id!)
     toast.success('Lead verwijderd')
     navigate('/leads')
@@ -519,10 +521,11 @@ export function LeadDetail() {
         actions={
           <div className="flex items-center gap-2">
             <StatusDropdown status={lead.status} onChange={handleStatusChange} />
-            <Button size="sm" variant="ghost" onClick={() => setShowEditForm(true)} className="h-7 text-xs">
+            <Button size="sm" variant="outline" onClick={() => setShowEditForm(true)} className="h-7 text-xs gap-1.5">
+              <Edit2 size={12} />
               Bewerken
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleDelete} className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10">
+            <Button size="sm" variant="outline" onClick={() => setConfirmDeleteOpen(true)} className="h-7 w-7 p-0 text-text-muted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/25">
               <Trash2 size={13} />
             </Button>
           </div>
@@ -536,57 +539,59 @@ export function LeadDetail() {
           <div className="flex flex-col gap-4">
 
             {/* Identity */}
-            <div className="bg-surface-2 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3 pb-2 border-b border-border-subtle">
-                <div className="w-10 h-10 rounded-xl bg-accent-blue/20 flex items-center justify-center shrink-0">
-                  <span className="text-base font-bold text-accent-blue">{lead.companyName.charAt(0)}</span>
+            <PageSection>
+              <div className="p-4">
+                <div className="flex items-center gap-3 pb-3 mb-1 border-b border-border-subtle/60">
+                  <InitialsAvatar name={lead.companyName} size="lg" />
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">{lead.companyName}</p>
+                    {lead.contactPerson && (
+                      <p className="text-xs text-text-muted">{lead.contactPerson}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">{lead.companyName}</p>
-                  <p className="text-xs text-text-muted">{lead.contactPerson}</p>
-                </div>
-              </div>
-              <InfoRow label="E-mail" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
-              <InfoRow label="Telefoon" value={lead.phone} href={lead.phone ? `tel:${lead.phone}` : undefined} />
-              <InfoRow label="Bron" value={lead.source ? (SOURCE_LABELS[lead.source] ?? lead.source) : undefined} />
-              {lead.estimatedValue != null && (
-                <InfoRow label="Geschatte waarde" value={`€${lead.estimatedValue.toLocaleString('nl-NL')}`} />
-              )}
-              {lead.lastContactedAt && (
+                <InfoRow label="E-mail" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
+                <InfoRow label="Telefoon" value={lead.phone} href={lead.phone ? `tel:${lead.phone}` : undefined} />
+                <InfoRow label="Bron" value={lead.source ? (SOURCE_LABELS[lead.source] ?? lead.source) : undefined} />
+                {lead.estimatedValue != null && (
+                  <InfoRow label="Geschatte waarde" value={`€${lead.estimatedValue.toLocaleString('nl-NL')}`} />
+                )}
+                {lead.lastContactedAt && (
+                  <InfoRow
+                    label="Laatste contact"
+                    value={format(parseISO(lead.lastContactedAt), 'd MMMM yyyy', { locale: nl })}
+                  />
+                )}
                 <InfoRow
-                  label="Laatste contact"
-                  value={format(parseISO(lead.lastContactedAt), 'd MMMM yyyy', { locale: nl })}
+                  label="Aangemaakt op"
+                  value={format(parseISO(lead.createdAt), 'd MMMM yyyy', { locale: nl })}
                 />
-              )}
-              <div className="flex flex-col gap-0.5 pt-1 border-t border-border-subtle">
-                <span className="text-xs text-text-muted">Aangemaakt op</span>
-                <span className="text-sm text-text-secondary">
-                  {format(parseISO(lead.createdAt), 'd MMMM yyyy', { locale: nl })}
-                </span>
               </div>
-            </div>
+            </PageSection>
 
             {/* Notes */}
-            <div className="bg-surface-2 border border-border-subtle rounded-xl p-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-text-secondary">Notities</span>
-                {notesSaving && <span className="text-xs text-text-muted">Opslaan...</span>}
+            <PageSection
+              title="Notities"
+              icon={FileText}
+              action={notesSaving ? <span className="text-[10px] text-text-muted">Opslaan...</span> : undefined}
+            >
+              <div className="p-3">
+                <MentionTextarea
+                  value={notesValue}
+                  onChange={handleNotesChange}
+                  placeholder="Aantekeningen over deze lead... gebruik @ om iemand te taggen"
+                  rows={5}
+                  className="text-sm"
+                />
               </div>
-              <MentionTextarea
-                value={notesValue}
-                onChange={handleNotesChange}
-                placeholder="Aantekeningen over deze lead... gebruik @ om iemand te taggen"
-                rows={5}
-                className="text-sm"
-              />
-            </div>
+            </PageSection>
 
             {/* Attachments */}
             <LeadAttachments leadId={lead.id} userId={profile?.id} />
 
             {/* Convert to client */}
             {lead.status === 'won' && (
-              <div className="bg-green-500/10 border border-green-500/25 rounded-xl p-4 flex flex-col gap-3">
+              <div className="bg-green-500/[0.08] border border-green-500/25 rounded-xl p-4 flex flex-col gap-3">
                 <div>
                   <p className="text-sm font-semibold text-green-400">Lead gewonnen!</p>
                   <p className="text-xs text-text-muted mt-0.5">Zet deze lead om naar een klant om te beginnen met facturatie en content.</p>
@@ -594,7 +599,7 @@ export function LeadDetail() {
                 <Button
                   size="sm"
                   onClick={() => setShowClientForm(true)}
-                  className="bg-green-500 hover:bg-green-400 text-white w-full gap-1.5"
+                  className="bg-green-600 hover:bg-green-500 text-white w-full gap-1.5"
                 >
                   Omzetten naar klant
                   <ArrowRight size={13} />
@@ -604,16 +609,14 @@ export function LeadDetail() {
           </div>
 
           {/* Right: Contact log */}
-          <div className="bg-surface-2 border border-border-subtle rounded-xl p-4 lg:p-5">
-            <div className="flex items-center justify-between mb-4 lg:mb-5">
-              <h2 className="text-sm font-semibold text-text-primary">Contacthistorie</h2>
+          <PageSection title="Contacthistorie" icon={Calendar}>
+            <div className="p-4 lg:p-5">
+              <ContactLog
+                leadId={lead.id}
+                onLastContactUpdate={(date) => updateLead(lead.id, { lastContactedAt: date })}
+              />
             </div>
-            <Separator className="bg-border-subtle mb-4 lg:mb-5" />
-            <ContactLog
-              leadId={lead.id}
-              onLastContactUpdate={(date) => updateLead(lead.id, { lastContactedAt: date })}
-            />
-          </div>
+          </PageSection>
         </div>
       </div>
 

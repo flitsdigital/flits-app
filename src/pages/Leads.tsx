@@ -2,15 +2,14 @@ import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus,
-  Search,
   UserPlus,
-  ArrowUpDown,
   Sparkles,
   Phone,
   CheckCircle2,
   FileText,
   Trophy,
   XCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow, parseISO } from 'date-fns'
@@ -22,10 +21,12 @@ import { useLeadsData } from '../hooks/useLeadsData'
 import { usePageMeta } from '../hooks/usePageMeta'
 import type { Lead, LeadStatus } from '../types'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { SearchInput } from '../components/SearchInput'
+import { InitialsAvatar } from '../components/InitialsAvatar'
+import { ListTable, ListHeader, SortButton, ListBody, ListEmpty } from '../components/ListTable'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ type SortKey = 'companyName' | 'estimatedValue' | 'lastContactedAt' | 'createdAt
 export function Leads() {
   usePageMeta('Leads → Flits Impact', 'Beheer je leadpipeline.')
   const navigate = useNavigate()
-  const { leads, loading, addLead, updateLeadStatus } = useLeadsData()
+  const { leads, loading, error, loadLeads, addLead, updateLeadStatus } = useLeadsData()
 
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [showForm, setShowForm] = useState(false)
@@ -385,15 +386,12 @@ export function Leads() {
       <div className={clsx('flex-1 px-4 lg:px-6 py-4 lg:py-5 flex flex-col min-h-0', viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto')}>
         {/* Toolbar */}
         <div className="flex items-center gap-2 lg:gap-3 mb-4 lg:mb-5 shrink-0 flex-wrap">
-          <div className="relative flex-1 min-w-[180px] lg:max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <Input
-              className="pl-8 bg-surface-2 border-border-subtle"
-              placeholder="Zoek lead..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Zoek lead…"
+            className="flex-1 min-w-[180px] lg:max-w-xs"
+          />
 
           {viewMode === 'list' && (
             <div className="w-full lg:w-auto overflow-x-auto scrollbar-none">
@@ -427,6 +425,14 @@ export function Leads() {
               <div className="flex justify-center py-16">
                 <div className="w-5 h-5 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : error && leads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                <p className="text-sm text-text-muted max-w-sm">{error}</p>
+                <Button size="sm" variant="outline" onClick={() => void loadLeads()} className="gap-1.5">
+                  <RefreshCw size={14} />
+                  Opnieuw proberen
+                </Button>
+              </div>
             ) : (
               <LeadsKanban
                 leads={filtered}
@@ -440,65 +446,50 @@ export function Leads() {
 
         {/* List view */}
         {viewMode === 'list' && (
-          <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden">
-            {/* Desktop kolomkoppen */}
-            <div className="hidden lg:grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2 border-b border-border-subtle">
-              <button
-                onClick={() => toggleSort('companyName')}
-                className={cn('text-xs font-medium text-left transition-colors flex items-center gap-1', sortKey === 'companyName' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary')}
-              >
-                Bedrijf {sortKey === 'companyName' && <ArrowUpDown size={11} />}
-              </button>
-              <span className="text-xs font-medium text-text-muted">Status</span>
-              <button
-                onClick={() => toggleSort('estimatedValue')}
-                className={cn('text-xs font-medium text-left transition-colors flex items-center gap-1', sortKey === 'estimatedValue' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary')}
-              >
-                Waarde {sortKey === 'estimatedValue' && <ArrowUpDown size={11} />}
-              </button>
-              <span className="text-xs font-medium text-text-muted">Bron</span>
-              <button
-                onClick={() => toggleSort('lastContactedAt')}
-                className={cn('text-xs font-medium text-left transition-colors flex items-center gap-1', sortKey === 'lastContactedAt' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary')}
-              >
-                Laatste contact {sortKey === 'lastContactedAt' && <ArrowUpDown size={11} />}
-              </button>
-            </div>
-
-            {filtered.length === 0 && !loading && (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <UserPlus size={24} className="text-text-muted mb-2 opacity-40" />
-                <p className="text-xs text-text-muted">Geen leads gevonden</p>
+          <ListTable>
+            <ListHeader className="hidden lg:flex">
+              <div className="flex-1 min-w-0">
+                <SortButton label="Bedrijf" active={sortKey === 'companyName'} asc={sortAsc} onClick={() => toggleSort('companyName')} />
               </div>
-            )}
+              <div className="w-[160px] shrink-0"><span className="text-xs text-text-muted">Status</span></div>
+              <div className="w-[140px] shrink-0">
+                <SortButton label="Waarde" active={sortKey === 'estimatedValue'} asc={sortAsc} onClick={() => toggleSort('estimatedValue')} />
+              </div>
+              <div className="w-[120px] shrink-0"><span className="text-xs text-text-muted">Bron</span></div>
+              <div className="w-[140px] shrink-0">
+                <SortButton label="Laatste contact" active={sortKey === 'lastContactedAt'} asc={sortAsc} onClick={() => toggleSort('lastContactedAt')} />
+              </div>
+            </ListHeader>
 
-            <div className="divide-y divide-border-subtle">
+            {filtered.length === 0 && !loading && <ListEmpty text="Geen leads gevonden" icon={UserPlus} />}
+
+            <ListBody>
               {filtered.map((lead) => {
                 const cfg = LEAD_STATUS_CONFIG[lead.status]
-                const initials = lead.companyName.charAt(0).toUpperCase()
                 return (
                   <div key={lead.id}>
                     {/* Desktop rij */}
                     <div
                       onClick={() => navigate(`/leads/${lead.id}`)}
-                      className="hidden lg:grid grid-cols-[1fr_160px_140px_120px_140px] gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center cursor-pointer"
+                      className="hidden lg:flex gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors items-center cursor-pointer group"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
-                        <p className="text-xs text-text-muted truncate">{lead.contactPerson}</p>
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <InitialsAvatar name={lead.companyName} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
+                          <p className="text-xs text-text-muted truncate">{lead.contactPerson}</p>
+                        </div>
                       </div>
-                      <div>
-                        <Badge className={cn('text-xs border font-medium', cfg.badge)}>
-                          {cfg.label}
-                        </Badge>
+                      <div className="w-[160px] shrink-0">
+                        <Badge className={cn('text-xs border font-medium', cfg.badge)}>{cfg.label}</Badge>
                       </div>
-                      <div className="text-sm text-text-secondary">
+                      <div className="w-[140px] shrink-0 text-sm text-text-secondary">
                         {lead.estimatedValue != null ? `€${lead.estimatedValue.toLocaleString('nl-NL')}` : '—'}
                       </div>
-                      <div className="text-sm text-text-muted capitalize">
+                      <div className="w-[120px] shrink-0 text-xs text-text-muted capitalize">
                         {lead.source ?? '—'}
                       </div>
-                      <div className="text-sm text-text-muted">
+                      <div className="w-[140px] shrink-0 text-xs text-text-muted">
                         {lead.lastContactedAt ? lastContactLabel(lead.lastContactedAt) : '—'}
                       </div>
                     </div>
@@ -510,15 +501,11 @@ export function Leads() {
                       className="lg:hidden w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-md bg-accent-blue/15 flex items-center justify-center shrink-0 border border-accent-blue/25">
-                          <span className="text-sm font-semibold text-accent-blue">{initials}</span>
-                        </div>
+                        <InitialsAvatar name={lead.companyName} size="md" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-medium text-text-primary truncate">{lead.companyName}</p>
-                            <Badge className={cn('text-xs border font-medium', cfg.badge)}>
-                              {cfg.label}
-                            </Badge>
+                            <Badge className={cn('text-xs border font-medium', cfg.badge)}>{cfg.label}</Badge>
                           </div>
                           <p className="text-xs text-text-muted truncate mt-0.5">
                             {lead.contactPerson}
@@ -536,8 +523,8 @@ export function Leads() {
                   </div>
                 )
               })}
-            </div>
-          </div>
+            </ListBody>
+          </ListTable>
         )}
       </div>
 

@@ -1,5 +1,6 @@
 export type UserRole = 'admin' | 'default'
 export type AppPage = 'dashboard' | 'clients' | 'timeline' | 'content' | 'reiskosten' | 'projects' | 'leads' | 'time_tracking'
+export type FeatureFlag = 'financials'
 
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ export interface UserProfile {
   name?: string | null
   role: UserRole
   allowed_pages: AppPage[]
+  allowed_features: FeatureFlag[]
   avatar_url?: string | null
 }
 
@@ -201,6 +203,8 @@ export interface Project {
   color: string
   startDate?: string | null
   deadline?: string | null
+  value?: number | null
+  invoicedAmount?: number | null
   createdAt: string
   updatedAt: string
 }

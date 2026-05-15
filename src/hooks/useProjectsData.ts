@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { projectsDb } from '../lib/projectsDb'
+import { useAuthStore } from '../store/useAuthStore'
 import type { Project, Task, TaskStatus } from '../types'
 
 export interface UserProfileLite {
@@ -10,6 +11,8 @@ export interface UserProfileLite {
 }
 
 export function useProjectsData() {
+  const authReady = useAuthStore((s) => s.authReady)
+  const sessionUserId = useAuthStore((s) => s.session?.user.id)
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
@@ -36,7 +39,10 @@ export function useProjectsData() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadAll() }, [loadAll])
+  useEffect(() => {
+    if (!authReady || !sessionUserId) return
+    loadAll()
+  }, [loadAll, authReady, sessionUserId])
 
   async function loadProjectTasks(projectId: string) {
     const data = await projectsDb.fetchProjectTasks(projectId)
