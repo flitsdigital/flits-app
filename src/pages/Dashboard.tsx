@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Users, TrendingUp, AlertCircle, Clock, UserPlus,
-  ArrowRight, Calendar, FileText, CheckCircle2,
+  Calendar, FileText, CheckCircle2,
   MessageSquare, Zap, TriangleAlert, BadgeCheck, Timer,
 } from 'lucide-react'
 import { parseISO, differenceInDays, startOfDay, format, startOfWeek, endOfWeek } from 'date-fns'
@@ -17,6 +17,9 @@ import { LEAD_STATUS_CONFIG } from './Leads'
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
 import { PageHeader } from '../components/PageHeader'
+import { KpiCard } from '../components/KpiCard'
+import { SectionHeader } from '../components/SectionHeader'
+import { InitialsAvatar } from '../components/InitialsAvatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -33,54 +36,6 @@ function greeting() {
   if (h < 12) return 'Goedemorgen'
   if (h < 18) return 'Goedemiddag'
   return 'Goedenavond'
-}
-
-// ── KPI card ──────────────────────────────────────────────────────────────────
-
-function KpiCard({
-  label, value, icon: Icon, sub, accent, to,
-}: {
-  label: string; value: string | number; icon: React.ElementType
-  sub?: string; accent?: 'red' | 'green' | 'orange'; to?: string
-}) {
-  const accentCls = { red: 'text-red-400', orange: 'text-orange-400', green: 'text-green-400' }
-  const inner = (
-    <CardContent className="p-3 lg:p-4">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-xs text-text-muted leading-tight truncate">{label}</p>
-        <Icon size={13} className="text-text-muted opacity-50 shrink-0" />
-      </div>
-      <p className={cn('text-lg lg:text-xl font-semibold text-text-primary tabular-nums truncate', accent && accentCls[accent])}>
-        {value}
-      </p>
-      {sub && <p className="text-xs text-text-muted mt-1 truncate">{sub}</p>}
-    </CardContent>
-  )
-  if (to) return <Card className="hover:bg-white/[0.02] transition-colors cursor-pointer"><Link to={to}>{inner}</Link></Card>
-  return <Card>{inner}</Card>
-}
-
-// ── Section header ────────────────────────────────────────────────────────────
-
-function SectionHeader({ icon: Icon, title, to, count }: {
-  icon: React.ElementType; title: string; to?: string; count?: number
-}) {
-  return (
-    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-subtle">
-      <Icon size={13} className="text-text-muted shrink-0" />
-      <span className="text-xs font-semibold text-text-secondary flex-1">{title}</span>
-      {count != null && (
-        <span className="text-xs bg-surface-3 border border-border-subtle text-text-muted rounded px-1.5 py-0.5 font-medium tabular-nums">
-          {count}
-        </span>
-      )}
-      {to && (
-        <Link to={to} className="text-xs text-text-muted hover:text-text-secondary transition-colors flex items-center gap-0.5 ml-1">
-          Alles <ArrowRight size={10} />
-        </Link>
-      )}
-    </div>
-  )
 }
 
 function EmptyRow({ text }: { text: string }) {
@@ -228,6 +183,7 @@ export function Dashboard() {
   const kpis = [
     hasClients && (
       <KpiCard key="clients" label="Actieve klanten" value={clientStats.active.length} icon={Users}
+        accent="blue"
         sub={clientStats.paused.length > 0 ? `${clientStats.paused.length} gepauzeerd` : 'Alles actief'} to="/clients" />
     ),
     hasClients && (
@@ -237,23 +193,24 @@ export function Dashboard() {
     hasTimeline && (
       <KpiCard key="overdue" label="Verlopen facturen" value={clientStats.overdueCount} icon={AlertCircle}
         sub={clientStats.overdueCount > 0 ? 'Actie vereist' : 'Alles op orde'}
-        accent={clientStats.overdueCount > 0 ? 'red' : undefined} to="/timeline" />
+        accent={clientStats.overdueCount > 0 ? 'red' : 'blue'} to="/timeline" />
     ),
     hasTimeline && (
       <KpiCard key="thisweek" label="Facturen deze week" value={clientStats.thisWeekCount} icon={Clock}
-        sub="Komende 7 dagen" accent={clientStats.thisWeekCount > 0 ? 'orange' : undefined} to="/timeline" />
+        sub="Komende 7 dagen" accent={clientStats.thisWeekCount > 0 ? 'orange' : 'blue'} to="/timeline" />
     ),
     hasLeads && (
       <KpiCard key="leads" label="Leads in pipeline" value={leadStats.activeLeads.length} icon={UserPlus}
+        accent="purple"
         sub={leadStats.pipelineValue > 0 ? `€${leadStats.pipelineValue.toLocaleString('nl-NL')} waarde` : 'Geen waarde ingevuld'}
         to="/leads" />
     ),
     hasContent && (
       <KpiCard key="posts" label="Posts te doen" value={postStats.byStatus.todo + postStats.byStatus.in_progress}
-        icon={FileText} sub={`${postStats.byStatus.feedback} wacht op feedback`} to="/content" />
+        icon={FileText} accent="orange" sub={`${postStats.byStatus.feedback} wacht op feedback`} to="/content" />
     ),
     hasTime && (
-      <KpiCard key="time" label="Uren deze week" value="—" icon={Timer} sub="Zie urenregistratie" to="/uren" />
+      <KpiCard key="time" label="Uren deze week" value="—" icon={Timer} accent="blue" sub="Zie urenregistratie" to="/uren" />
     ),
   ].filter(Boolean)
 
@@ -448,9 +405,7 @@ export function Dashboard() {
                                     const days = l.lastContactedAt ? differenceInDays(today, parseISO(l.lastContactedAt)) : null
                                     return (
                                       <Link key={l.id} to={`/leads/${l.id}`} className="flex items-center gap-2 hover:bg-white/[0.03] rounded-md px-1 py-1 transition-colors">
-                                        <div className="w-5 h-5 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
-                                          <span className="text-[9px] font-bold text-accent-blue">{l.companyName.charAt(0)}</span>
-                                        </div>
+                                        <InitialsAvatar name={l.companyName} size="xs" />
                                         <span className="text-xs text-text-primary truncate flex-1">{l.companyName}</span>
                                         <span className="text-xs text-orange-400 shrink-0 tabular-nums">
                                           {days != null ? `${days}d` : 'nieuw'}
@@ -490,9 +445,7 @@ export function Dashboard() {
                             return (
                               <Link key={c.id} to={`/clients/${c.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-6 h-6 rounded bg-accent-blue/20 flex items-center justify-center shrink-0">
-                                    <span className="text-xs font-semibold text-accent-blue">{c.companyName.charAt(0)}</span>
-                                  </div>
+                                  <InitialsAvatar name={c.companyName} size="sm" />
                                   <div className="min-w-0">
                                     <p className="text-xs font-medium text-text-primary truncate">{c.companyName}</p>
                                     <p className="text-xs text-text-muted">
@@ -542,9 +495,7 @@ export function Dashboard() {
                             return (
                               <Link key={c.id} to={`/clients/${c.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors">
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-6 h-6 rounded bg-purple-500/20 flex items-center justify-center shrink-0">
-                                    <span className="text-xs font-semibold text-purple-400">{c.companyName.charAt(0)}</span>
-                                  </div>
+                                  <InitialsAvatar name={c.companyName} size="sm" />
                                   <div className="min-w-0">
                                     <p className="text-xs font-medium text-text-primary truncate">{c.companyName}</p>
                                     <p className="text-xs text-text-muted">{c.packageType || c.contactPerson}</p>
