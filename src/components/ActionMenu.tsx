@@ -48,7 +48,10 @@ export function ActionMenu({ items, trigger, className, align = 'end' }: ActionM
             <span key={i}>
               {item.separator && <DropdownMenuSeparator />}
               <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); item.onClick(e) }}
+                onSelect={(e) => {
+                  e.preventDefault()
+                  item.onClick(e as unknown as React.MouseEvent)
+                }}
                 className={cn(
                   'gap-2 text-xs',
                   item.variant === 'destructive' && 'text-red-400 focus:text-red-400 focus:bg-red-500/10',

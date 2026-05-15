@@ -135,7 +135,12 @@ export function ContentPostCard({
             <DropdownMenuItem onClick={onEdit}>
               <Edit2 size={12} className="mr-2" /> Bewerken
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onCopyPreview}>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault()
+                onCopyPreview()
+              }}
+            >
               {copiedPostId === post.id ? <Check size={12} className="mr-2" /> : <Share2 size={12} className="mr-2" />}
               {copiedPostId === post.id ? 'Gekopieerd!' : 'Preview link'}
             </DropdownMenuItem>

@@ -213,7 +213,7 @@ export function Content() {
     viewMode === "month" ? monthStats : weekStats;
 
   async function copyPreviewLink(postId: string) {
-    const ok = await copyPostPreviewLink(postId, { socialOg: true });
+    const ok = await copyPostPreviewLink(postId);
     if (ok) {
       setCopiedPostId(postId);
       window.setTimeout(

@@ -1,14 +1,5 @@
-/** Copy text — works after async gaps (dropdowns/dialogs) where Clipboard API loses focus. */
-export async function copyTextToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    // Clipboard API blocked or document not focused — try fallback
-  }
-
+/** Synchronous copy — must run in the same tick as the click (dropdowns/dialogs). */
+export function copyTextToClipboardSync(text: string): boolean {
   try {
     const el = document.createElement('textarea')
     el.value = text
@@ -33,4 +24,20 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** Copy text — sync first, then Clipboard API as fallback. */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (copyTextToClipboardSync(text)) return true
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through
+  }
+
+  return copyTextToClipboardSync(text)
 }

@@ -9,6 +9,7 @@ import {
 import type { Post, PostType, PostStatus, Client } from '../types'
 import { supabase } from '../lib/supabase'
 import { copyPostPreviewLink } from '../lib/previewLink'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
@@ -310,13 +311,17 @@ export function PostForm({
     if (isDirty && savedState) setSavedState(false)
   }, [isDirty, savedState])
 
-  async function copyPreviewLink() {
-    if (!sharePostId) return
-    const ok = await copyPostPreviewLink(sharePostId)
-    if (ok) {
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
+  function copyPreviewLink() {
+    if (!sharePostId) {
+      toast.error('Sla de post eerst op om een preview-link te delen')
+      return
     }
+    void copyPostPreviewLink(sharePostId).then((ok) => {
+      if (ok) {
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1800)
+      }
+    })
   }
 
   function toUnicodeBold(input: string): string {
