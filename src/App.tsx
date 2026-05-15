@@ -66,7 +66,7 @@ export default function App() {
         />
       </Routes>
 
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster closeButton />
     </BrowserRouter>
   )
 }

@@ -22,13 +22,14 @@ import {
   ExternalLink,
   Share2,
   Check,
+  Eye,
   FolderKanban,
   FileText,
 } from "lucide-react";
 import { parseISO, format } from "date-fns";
 import { nl } from 'date-fns/locale/nl'
 import { useStore } from "../store/useStore";
-import { copyPostPreviewLink } from "../lib/previewLink";
+import { copyPostPreviewLink, openPostPreview } from "../lib/previewLink";
 import { usePermissions } from "../hooks/usePermissions";
 import { projectsDb } from "../lib/projectsDb";
 import { formatDate, formatWeek, formatWeekDate, formatCycle } from "../lib/billing";
@@ -158,15 +159,15 @@ export function ClientDetail() {
     navigate("/clients");
   }
 
-  async function copyPreviewLink(postId: string) {
-    const ok = await copyPostPreviewLink(postId);
-    if (ok) {
+  function copyPreviewLink(postId: string) {
+    void copyPostPreviewLink(postId).then((ok) => {
+      if (!ok) return;
       setCopiedPostId(postId);
       window.setTimeout(
         () => setCopiedPostId((cur) => (cur === postId ? null : cur)),
         1800,
       );
-    }
+    });
   }
 
   const ct = client.clientType ?? "recurring";
@@ -422,7 +423,19 @@ export function ClientDetail() {
                           )}
                         </div>
 
-                        <ActionMenu
+                        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            title="Preview bekijken"
+                            className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-white/[0.06] transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPostPreview(post.id);
+                            }}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <ActionMenu
                           items={[
                             {
                               label: copiedPostId === post.id ? "Gekopieerd!" : "Preview link kopiëren",
@@ -443,6 +456,7 @@ export function ClientDetail() {
                             },
                           ]}
                         />
+                        </div>
                       </div>
                     );
                   })}

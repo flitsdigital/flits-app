@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import type { Post, PostType, PostStatus, Client } from '../types'
 import { supabase } from '../lib/supabase'
-import { copyPostPreviewLink } from '../lib/previewLink'
+import { copyPostPreviewLink, openPostPreview } from '../lib/previewLink'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -396,14 +396,28 @@ export function PostForm({
           </Breadcrumb>
           <div className="ml-auto flex items-center gap-1">
             {sharePostId && (
-              <Button
-                type="button" variant="ghost" size="icon"
-                onClick={copyPreviewLink}
-                className="size-6 text-muted-foreground"
-                title={copied ? 'Gekopieerd!' : 'Deel preview link'}
-              >
-                <Share2 className="size-3.5" />
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openPostPreview(sharePostId)}
+                  className="size-6 text-muted-foreground"
+                  title="Preview bekijken"
+                >
+                  <Eye className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={copyPreviewLink}
+                  className="size-6 text-muted-foreground"
+                  title={copied ? 'Gekopieerd!' : 'Deel preview link'}
+                >
+                  <Share2 className="size-3.5" />
+                </Button>
+              </>
             )}
             {onDuplicate && (
               <Button

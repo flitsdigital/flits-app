@@ -1,5 +1,6 @@
 import type { DragEvent, MouseEvent } from 'react'
-import { ExternalLink, Edit2, Trash2, Share2, Check, MoreHorizontal } from 'lucide-react'
+import { ExternalLink, Edit2, Trash2, Share2, Check, MoreHorizontal, Eye } from 'lucide-react'
+import { openPostPreview } from '../../lib/previewLink'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { Post, PostStatus } from '../../types'
@@ -124,7 +125,20 @@ export function ContentPostCard({
           </a>
         )}
       </div>
-      <div className="shrink-0 self-start mt-0.5">
+      <div className="shrink-0 self-start mt-0.5 flex items-center gap-0.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-text-muted opacity-0 group-hover:opacity-100"
+          title="Preview bekijken"
+          onClick={(e) => {
+            e.stopPropagation()
+            openPostPreview(post.id)
+          }}
+        >
+          <Eye size={13} />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7 text-text-muted opacity-0 group-hover:opacity-100">
@@ -136,7 +150,7 @@ export function ContentPostCard({
               <Edit2 size={12} className="mr-2" /> Bewerken
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={(e) => {
+              onClick={(e) => {
                 e.preventDefault()
                 onCopyPreview()
               }}

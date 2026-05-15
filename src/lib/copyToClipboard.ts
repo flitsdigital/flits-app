@@ -1,4 +1,4 @@
-/** Synchronous copy — must run in the same tick as the click (dropdowns/dialogs). */
+/** Synchronous copy — fallback when Clipboard API is unavailable or rejected. */
 export function copyTextToClipboardSync(text: string): boolean {
   try {
     const el = document.createElement('textarea')
@@ -26,18 +26,27 @@ export function copyTextToClipboardSync(text: string): boolean {
   }
 }
 
-/** Copy text — sync first, then Clipboard API as fallback. */
-export async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (copyTextToClipboardSync(text)) return true
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    // fall through
+/**
+ * Copy while the browser still treats the action as a user gesture.
+ * Call synchronously from click / onSelect — do not await before calling this.
+ */
+export function copyTextInUserGesture(
+  text: string,
+  onResult: (ok: boolean) => void,
+): void {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => onResult(true))
+      .catch(() => onResult(copyTextToClipboardSync(text)))
+    return
   }
+  onResult(copyTextToClipboardSync(text))
+}
 
-  return copyTextToClipboardSync(text)
+/** Copy text — prefers Clipboard API, then execCommand. */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    copyTextInUserGesture(text, resolve)
+  })
 }

@@ -1,9 +1,14 @@
 import { toast } from 'sonner'
-import { copyTextToClipboard, copyTextToClipboardSync } from './copyToClipboard'
+import { copyTextInUserGesture } from './copyToClipboard'
 
 /** Public preview URL — anyone with the link can view/approve (post id is the secret). */
 export function buildPreviewUrl(postId: string): string {
   return `${window.location.origin}/preview/${postId}`
+}
+
+/** Open preview in a new tab (logged-in team view of the public page). */
+export function openPostPreview(postId: string): void {
+  window.open(buildPreviewUrl(postId), '_blank', 'noopener,noreferrer')
 }
 
 export function buildOgPreviewUrl(postId: string): string {
@@ -15,27 +20,25 @@ export function buildOgPreviewUrl(postId: string): string {
   return `${base.replace(/\/$/, '')}/functions/v1/preview-og/${postId}`
 }
 
-export async function copyPostPreviewLink(
+/** Call directly from a click handler (no await before this). */
+export function copyPostPreviewLink(
   postId: string,
   opts?: { socialOg?: boolean },
 ): Promise<boolean> {
   const link = opts?.socialOg ? buildOgPreviewUrl(postId) : buildPreviewUrl(postId)
 
-  // Sync copy in click handler tick (dropdown/dialog safe)
-  if (copyTextToClipboardSync(link)) {
-    toast.success('Preview-link gekopieerd', { description: link })
-    return true
-  }
-
-  const copied = await copyTextToClipboard(link)
-  if (copied) {
-    toast.success('Preview-link gekopieerd', { description: link })
-    return true
-  }
-
-  toast.error('Kopiëren mislukt', {
-    description: link,
-    duration: 8000,
+  return new Promise((resolve) => {
+    copyTextInUserGesture(link, (ok) => {
+      if (ok) {
+        toast.success('Preview-link gekopieerd', { description: link })
+        resolve(true)
+        return
+      }
+      toast.error('Kopiëren mislukt', {
+        description: link,
+        duration: 8000,
+      })
+      resolve(false)
+    })
   })
-  return false
 }

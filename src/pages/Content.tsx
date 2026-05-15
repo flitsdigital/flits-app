@@ -212,16 +212,16 @@ export function Content() {
   const stats =
     viewMode === "month" ? monthStats : weekStats;
 
-  async function copyPreviewLink(postId: string) {
-    const ok = await copyPostPreviewLink(postId);
-    if (ok) {
+  function copyPreviewLink(postId: string) {
+    void copyPostPreviewLink(postId).then((ok) => {
+      if (!ok) return;
       setCopiedPostId(postId);
       window.setTimeout(
         () =>
           setCopiedPostId((current) => (current === postId ? null : current)),
         1800,
       );
-    }
+    });
   }
 
   return (
