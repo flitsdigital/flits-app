@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import {
@@ -21,6 +21,7 @@ import {
 import { invoicesForClient, getOpenInvoiceAmount, getProjectInvoiceProgress } from '@/lib/clientStats'
 import { InvoiceBadge } from '@/components/InvoiceBadge'
 import { useStore } from '@/store/useStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { Client, ClientInvoice, ClientInvoiceStatus } from '@/types'
 import { Check, Pencil, Plus, Trash2 } from 'lucide-react'
 import { MilestoneModal } from '@/components/MilestoneModal'
@@ -36,7 +37,16 @@ function invoiceStatusLabel(s: ClientInvoiceStatus): string {
 }
 
 export function ClientBillingSection({ client }: { client: Client }) {
+  const { can } = usePermissions()
   const clientInvoices = useStore((s) => s.clientInvoices)
+
+  if (!can('financials')) {
+    return (
+      <p className="text-sm text-text-muted py-8 text-center">
+        Je hebt geen toegang tot facturatiegegevens voor deze klant.
+      </p>
+    )
+  }
   const addClientInvoice = useStore((s) => s.addClientInvoice)
   const updateClientInvoice = useStore((s) => s.updateClientInvoice)
   const deleteClientInvoice = useStore((s) => s.deleteClientInvoice)

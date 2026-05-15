@@ -1,4 +1,4 @@
-import { supabaseAdmin, withTimeout } from './supabase'
+import { supabase, withTimeout } from './supabase'
 
 export interface Todo {
   id: string
@@ -53,7 +53,7 @@ function mapTodo(row: DbTodo): Todo {
 export const todosDb = {
   async fetchForUser(userId: string): Promise<Todo[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin
+      supabase
         .from('todos')
         .select('*')
         .eq('owner_id', userId)
@@ -92,7 +92,7 @@ export const todosDb = {
       updated_at: new Date().toISOString(),
     }
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('todos').upsert(payload as never).select().single()
+      supabase.from('todos').upsert(payload as never).select().single()
     )
     if (error) throw error
     return mapTodo(data as DbTodo)
@@ -100,20 +100,20 @@ export const todosDb = {
 
   async toggleDone(id: string, done: boolean): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('todos').update({ done, updated_at: new Date().toISOString() } as never).eq('id', id)
+      supabase.from('todos').update({ done, updated_at: new Date().toISOString() } as never).eq('id', id)
     )
     if (error) throw error
   },
 
   async updateNotes(id: string, notes: string): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('todos').update({ notes, updated_at: new Date().toISOString() } as never).eq('id', id)
+      supabase.from('todos').update({ notes, updated_at: new Date().toISOString() } as never).eq('id', id)
     )
     if (error) throw error
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('todos').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('todos').delete().eq('id', id))
     if (error) throw error
   },
 }

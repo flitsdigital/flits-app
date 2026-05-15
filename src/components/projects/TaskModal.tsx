@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Trash2, Check, Flag, Send, MessageSquare } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { projectsDb, type TaskComment } from '../../lib/projectsDb'
 import { useAuthStore } from '../../store/useAuthStore'
 import { notificationsDb } from '../../lib/notificationsDb'

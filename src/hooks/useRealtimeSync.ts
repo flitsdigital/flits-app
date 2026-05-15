@@ -16,10 +16,13 @@ import { useStore } from '../store/useStore'
  */
 export function useRealtimeSync() {
   const accessToken = useAuthStore((s) => s.session?.access_token)
-  const fetchClients = useStore((s) => s.fetchClients)
+  const fetchClientsOnly = useStore((s) => s.fetchClientsOnly)
+  const initialized = useStore((s) => s.initialized)
 
   useEffect(() => {
     if (!accessToken) return
+
+    let clientDebounce: ReturnType<typeof setTimeout> | null = null
 
     const channel = supabase
       .channel('crm-realtime')
@@ -41,14 +44,16 @@ export function useRealtimeSync() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients' },
         () => {
-          // Clients worden minder vaak gewijzigd — volledige refetch is betrouwbaarder
-          fetchClients()
+          if (!initialized) return
+          if (clientDebounce) clearTimeout(clientDebounce)
+          clientDebounce = setTimeout(() => void fetchClientsOnly(), 400)
         },
       )
       .subscribe()
 
     return () => {
+      if (clientDebounce) clearTimeout(clientDebounce)
       supabase.removeChannel(channel)
     }
-  }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accessToken, initialized, fetchClientsOnly])
 }

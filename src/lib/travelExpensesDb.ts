@@ -1,4 +1,5 @@
-import { supabase, supabaseAdmin, withTimeout } from './supabase'
+import { supabase, withTimeout } from './supabase'
+import { fetchProfilesAdminCached } from './appCaches'
 import type { TravelExpense, UserProfile } from '../types'
 
 /**
@@ -45,17 +46,11 @@ function fromRow(row: DbTravelExpense): TravelExpense {
 
 export const travelExpensesDb = {
   async fetchUsers(): Promise<UserProfile[]> {
-    const { data, error } = await withTimeout(
-      supabaseAdmin.from('profiles').select('*').order('email')
-    )
-    if (error) throw error
-    return data ?? []
+    return fetchProfilesAdminCached()
   },
 
   async fetchExpenses(input: { isAdmin: boolean; selectedUserId?: string | 'all' }): Promise<TravelExpense[]> {
-    let query = input.isAdmin
-      ? supabaseAdmin.from('travel_expenses').select('*').order('date', { ascending: false })
-      : supabase.from('travel_expenses').select('*').order('date', { ascending: false })
+    let query = supabase.from('travel_expenses').select('*').order('date', { ascending: false })
 
     if (input.isAdmin && input.selectedUserId && input.selectedUserId !== 'all') {
       query = query.eq('user_id', input.selectedUserId)
@@ -142,9 +137,8 @@ export const travelExpensesDb = {
     if (error) throw error
   },
 
-  async deleteExpense(id: string, isAdmin: boolean): Promise<void> {
-    const client = isAdmin ? supabaseAdmin : supabase
-    const { error } = await withTimeout(client.from('travel_expenses').delete().eq('id', id))
+  async deleteExpense(id: string, _isAdmin: boolean): Promise<void> {
+    const { error } = await withTimeout(supabase.from('travel_expenses').delete().eq('id', id))
     if (error) throw error
   },
 }

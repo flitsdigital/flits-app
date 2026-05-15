@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, ChevronLeft, ChevronRight, Check, ThumbsUp } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { nl } from 'date-fns/locale'
-import { supabase } from '../lib/supabase'
+import { nl } from 'date-fns/locale/nl'
+import { postPreviewApi } from '../lib/edgeApi'
 
 interface PreviewPost {
   id: string
@@ -29,33 +29,19 @@ export function PostPreview() {
 
   useEffect(() => {
     async function loadPreview() {
-      if (!postId) return
+      if (!postId) {
+        setError('Ongeldige preview-link.')
+        setLoading(false)
+        return
+      }
       setLoading(true)
       setError(null)
       try {
-        const { data: postData, error: postError } = await supabase
-          .from('posts')
-          .select('id, client_id, caption, media_url, media_urls, date, type, status')
-          .eq('id', postId)
-          .single()
-
-        if (postError || !postData) {
-          throw new Error('Post niet gevonden.')
-        }
-
+        const { post: postData, clientName: name } = await postPreviewApi.get(postId)
         setPost(postData as PreviewPost)
+        setClientName(name)
         setActiveSlide(0)
         setApproved((postData as PreviewPost).status === 'approved')
-
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('company_name')
-          .eq('id', postData.client_id)
-          .single()
-
-        if (clientData?.company_name) {
-          setClientName(clientData.company_name)
-        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Kon preview niet laden.')
       } finally {
@@ -63,7 +49,7 @@ export function PostPreview() {
       }
     }
 
-    loadPreview()
+    void loadPreview()
   }, [postId])
 
   const dateLabel = useMemo(() => {
@@ -105,17 +91,14 @@ export function PostPreview() {
   }
 
   async function handleApprove() {
-    if (!post || approved || approving) return
+    if (!post || !postId || approved || approving) return
     setApproving(true)
     try {
-      const { error } = await supabase
-        .from('posts')
-        .update({ status: 'approved' })
-        .eq('id', post.id)
-      if (error) throw error
+      await postPreviewApi.approve(postId)
       setApproved(true)
     } catch (e) {
       console.error('Goedkeuren mislukt:', e)
+      setError('Goedkeuren mislukt. Probeer het opnieuw.')
     } finally {
       setApproving(false)
     }

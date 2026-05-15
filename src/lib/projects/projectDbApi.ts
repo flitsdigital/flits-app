@@ -1,4 +1,9 @@
-import { supabaseAdmin, withTimeout } from '../supabase'
+import { supabase, withTimeout } from '../supabase'
+import {
+  fetchProfilesBasicCached,
+  projectTaskRefsCache,
+  projectsListCache,
+} from '../appCaches'
 import type { Milestone, Project, ProjectLabel, ProjectStatus, Subtask, Task, TaskPriority, TaskStatus } from '../../types'
 import {
   mapActivity,
@@ -26,32 +31,39 @@ import {
 
 export const projectsDb = {
   async fetchProjects(): Promise<Project[]> {
-    const { data, error } = await withTimeout(
-      supabaseAdmin.from('projects').select('*').order('created_at', { ascending: false })
-    )
-    if (error) throw error
-    return (data as DbProject[] ?? []).map(mapProject)
+    return projectsListCache.fetch(async () => {
+      const { data, error } = await withTimeout(
+        supabase.from('projects_app').select('*').order('created_at', { ascending: false }),
+      )
+      if (error) throw error
+      return (data as DbProject[] ?? []).map(mapProject)
+    })
   },
 
   async fetchProjectsForClient(clientId: string): Promise<Project[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('projects').select('*').eq('client_id', clientId).order('created_at', { ascending: false })
+      supabase.from('projects_app').select('*').eq('client_id', clientId).order('created_at', { ascending: false })
     )
     if (error) throw error
     return (data as DbProject[] ?? []).map(mapProject)
   },
 
   async fetchTaskRefs(): Promise<Array<{ id: string; projectId: string }>> {
-    const { data, error } = await withTimeout(
-      supabaseAdmin.from('tasks').select('id, project_id').order('created_at')
-    )
-    if (error) throw error
-    return (data as Array<{ id: string; project_id: string }> ?? []).map((t) => ({ id: t.id, projectId: t.project_id }))
+    return projectTaskRefsCache.fetch(async () => {
+      const { data, error } = await withTimeout(
+        supabase.from('tasks').select('id, project_id').order('created_at'),
+      )
+      if (error) throw error
+      return (data as Array<{ id: string; project_id: string }> ?? []).map((t) => ({
+        id: t.id,
+        projectId: t.project_id,
+      }))
+    })
   },
 
   async fetchProjectTasks(projectId: string): Promise<Task[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('tasks').select('*').eq('project_id', projectId).order('position')
+      supabase.from('tasks').select('*').eq('project_id', projectId).order('position')
     )
     if (error) throw error
     return (data as DbTask[] ?? []).map(mapTask)
@@ -59,18 +71,14 @@ export const projectsDb = {
 
   async fetchAllTasks(): Promise<Task[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('tasks').select('*').order('created_at', { ascending: false })
+      supabase.from('tasks').select('*').order('created_at', { ascending: false })
     )
     if (error) throw error
     return (data as DbTask[] ?? []).map(mapTask)
   },
 
-  async fetchProfilesBasic(): Promise<Array<{ id: string; email: string; name?: string | null; avatar_url?: string | null }>> {
-    const { data, error } = await withTimeout(
-      supabaseAdmin.from('profiles').select('id, email, name, avatar_url').order('created_at')
-    )
-    if (error) throw error
-    return data ?? []
+  async fetchProfilesBasic() {
+    return fetchProfilesBasicCached()
   },
 
   async saveProject(input: {
@@ -99,30 +107,34 @@ export const projectsDb = {
     }
 
     const query = input.id
-      ? supabaseAdmin.from('projects').update(payload as never).eq('id', input.id).select().single()
-      : supabaseAdmin.from('projects').insert(payload as never).select().single()
+      ? supabase.from('projects').update(payload as never).eq('id', input.id).select().single()
+      : supabase.from('projects').insert(payload as never).select().single()
 
     const { data, error } = await withTimeout(query)
     if (error) throw error
+    projectsListCache.invalidate()
+    projectTaskRefsCache.invalidate()
     return mapProject(data as DbProject)
   },
 
   async deleteProject(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('projects').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('projects').delete().eq('id', id))
     if (error) throw error
+    projectsListCache.invalidate()
+    projectTaskRefsCache.invalidate()
   },
 
   async fetchTask(taskId: string): Promise<Task & { subtasks: Subtask[]; comments: TaskComment[] }> {
     const [taskRes, subtasksRes, commentsRes] = await Promise.all([
-      withTimeout(supabaseAdmin.from('tasks').select('*').eq('id', taskId).single()),
-      withTimeout(supabaseAdmin.from('subtasks').select('*').eq('task_id', taskId).order('position')),
-      withTimeout(supabaseAdmin.from('task_comments').select('*').eq('task_id', taskId).order('created_at')),
+      withTimeout(supabase.from('tasks').select('*').eq('id', taskId).single()),
+      withTimeout(supabase.from('subtasks').select('*').eq('task_id', taskId).order('position')),
+      withTimeout(supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at')),
     ])
     if (taskRes.error) throw taskRes.error
     const task = mapTask(taskRes.data as DbTask)
     // Fetch label ids
     const { data: labelRows } = await withTimeout(
-      supabaseAdmin.from('task_labels').select('label_id').eq('task_id', taskId)
+      supabase.from('task_labels').select('label_id').eq('task_id', taskId)
     )
     task.labelIds = (labelRows ?? []).map((r: { label_id: string }) => r.label_id)
     return {
@@ -160,8 +172,8 @@ export const projectsDb = {
     }
 
     const query = input.id
-      ? supabaseAdmin.from('tasks').update(payload as never).eq('id', input.id).select().single()
-      : supabaseAdmin.from('tasks').insert({
+      ? supabase.from('tasks').update(payload as never).eq('id', input.id).select().single()
+      : supabase.from('tasks').insert({
         ...payload,
         project_id: input.projectId,
         position: input.position ?? 0,
@@ -173,20 +185,20 @@ export const projectsDb = {
   },
 
   async deleteTask(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('tasks').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('tasks').delete().eq('id', id))
     if (error) throw error
   },
 
   async updateTaskStatus(taskId: string, status: TaskStatus): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('tasks').update({ status, updated_at: new Date().toISOString() } as never).eq('id', taskId)
+      supabase.from('tasks').update({ status, updated_at: new Date().toISOString() } as never).eq('id', taskId)
     )
     if (error) throw error
   },
 
   async fetchTaskSubtasks(taskId: string): Promise<Subtask[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('subtasks').select('*').eq('task_id', taskId).order('position')
+      supabase.from('subtasks').select('*').eq('task_id', taskId).order('position')
     )
     if (error) throw error
     return (data as DbSubtask[] ?? []).map(mapSubtask)
@@ -194,19 +206,19 @@ export const projectsDb = {
 
   async addSubtask(taskId: string, title: string, position: number): Promise<Subtask> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('subtasks').insert({ task_id: taskId, title, position } as never).select().single()
+      supabase.from('subtasks').insert({ task_id: taskId, title, position } as never).select().single()
     )
     if (error) throw error
     return mapSubtask(data as DbSubtask)
   },
 
   async toggleSubtaskDone(id: string, done: boolean): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('subtasks').update({ done } as never).eq('id', id))
+    const { error } = await withTimeout(supabase.from('subtasks').update({ done } as never).eq('id', id))
     if (error) throw error
   },
 
   async deleteSubtask(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('subtasks').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('subtasks').delete().eq('id', id))
     if (error) throw error
   },
 
@@ -214,7 +226,7 @@ export const projectsDb = {
 
   async fetchTaskComments(taskId: string): Promise<TaskComment[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('task_comments').select('*').eq('task_id', taskId).order('created_at')
+      supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at')
     )
     if (error) throw error
     return (data as DbTaskComment[] ?? []).map(mapComment)
@@ -236,14 +248,14 @@ export const projectsDb = {
       content: input.content,
     }
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('task_comments').insert(payload as never).select().single()
+      supabase.from('task_comments').insert(payload as never).select().single()
     )
     if (error) throw error
     return mapComment(data as DbTaskComment)
   },
 
   async deleteTaskComment(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('task_comments').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('task_comments').delete().eq('id', id))
     if (error) throw error
   },
 
@@ -251,7 +263,7 @@ export const projectsDb = {
 
   async fetchSprints(projectId: string): Promise<Sprint[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('sprints').select('*').eq('project_id', projectId).order('created_at')
+      supabase.from('sprints').select('*').eq('project_id', projectId).order('created_at')
     )
     if (error) throw error
     return (data as DbSprint[] ?? []).map(mapSprint)
@@ -274,20 +286,20 @@ export const projectsDb = {
       status: input.status ?? 'planned',
     }
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('sprints').upsert(payload as never).select().single()
+      supabase.from('sprints').upsert(payload as never).select().single()
     )
     if (error) throw error
     return mapSprint(data as DbSprint)
   },
 
   async deleteSprint(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('sprints').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('sprints').delete().eq('id', id))
     if (error) throw error
   },
 
   async updateTaskSprint(taskId: string, sprintId: string | null): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('tasks').update({ sprint_id: sprintId, updated_at: new Date().toISOString() } as never).eq('id', taskId)
+      supabase.from('tasks').update({ sprint_id: sprintId, updated_at: new Date().toISOString() } as never).eq('id', taskId)
     )
     if (error) throw error
   },
@@ -296,7 +308,7 @@ export const projectsDb = {
 
   async fetchProjectActivity(projectId: string): Promise<ProjectActivity[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin
+      supabase
         .from('project_activity')
         .select('*')
         .eq('project_id', projectId)
@@ -322,7 +334,7 @@ export const projectsDb = {
       action: input.action,
       metadata: input.metadata ?? null,
     }
-    const { error } = await withTimeout(supabaseAdmin.from('project_activity').insert(payload as never))
+    const { error } = await withTimeout(supabase.from('project_activity').insert(payload as never))
     if (error) {
       // Activity logging is non-critical; suppress errors
       console.warn('Failed to log activity:', error.message)
@@ -333,7 +345,7 @@ export const projectsDb = {
 
   async fetchProjectLabels(projectId: string): Promise<ProjectLabel[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('project_labels').select('*').eq('project_id', projectId).order('created_at')
+      supabase.from('project_labels').select('*').eq('project_id', projectId).order('created_at')
     )
     if (error) throw error
     return (data as DbProjectLabel[] ?? []).map(mapLabel)
@@ -341,7 +353,7 @@ export const projectsDb = {
 
   async createLabel(projectId: string, name: string, color: string): Promise<ProjectLabel> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('project_labels').insert({ project_id: projectId, name, color } as never).select().single()
+      supabase.from('project_labels').insert({ project_id: projectId, name, color } as never).select().single()
     )
     if (error) throw error
     return mapLabel(data as DbProjectLabel)
@@ -349,28 +361,28 @@ export const projectsDb = {
 
   async updateLabel(id: string, patch: { name?: string; color?: string }): Promise<ProjectLabel> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('project_labels').update(patch as never).eq('id', id).select().single()
+      supabase.from('project_labels').update(patch as never).eq('id', id).select().single()
     )
     if (error) throw error
     return mapLabel(data as DbProjectLabel)
   },
 
   async deleteLabel(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('project_labels').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('project_labels').delete().eq('id', id))
     if (error) throw error
   },
 
   async setTaskLabels(taskId: string, labelIds: string[]): Promise<void> {
-    await withTimeout(supabaseAdmin.from('task_labels').delete().eq('task_id', taskId))
+    await withTimeout(supabase.from('task_labels').delete().eq('task_id', taskId))
     if (labelIds.length === 0) return
     const rows = labelIds.map((label_id) => ({ task_id: taskId, label_id }))
-    const { error } = await withTimeout(supabaseAdmin.from('task_labels').insert(rows as never))
+    const { error } = await withTimeout(supabase.from('task_labels').insert(rows as never))
     if (error) throw error
   },
 
   async fetchTaskLabelIds(taskId: string): Promise<string[]> {
     const { data } = await withTimeout(
-      supabaseAdmin.from('task_labels').select('label_id').eq('task_id', taskId)
+      supabase.from('task_labels').select('label_id').eq('task_id', taskId)
     )
     return (data ?? []).map((r: { label_id: string }) => r.label_id)
   },
@@ -379,7 +391,7 @@ export const projectsDb = {
 
   async fetchMilestones(projectId: string): Promise<Milestone[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('milestones').select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+      supabase.from('milestones').select('*').eq('project_id', projectId).order('sort_order').order('created_at')
     )
     if (error) throw error
     return (data as DbMilestone[] ?? []).map(mapMilestone)
@@ -404,15 +416,15 @@ export const projectsDb = {
       updated_at: new Date().toISOString(),
     }
     const query = input.id
-      ? supabaseAdmin.from('milestones').update(payload as never).eq('id', input.id).select().single()
-      : supabaseAdmin.from('milestones').insert(payload as never).select().single()
+      ? supabase.from('milestones').update(payload as never).eq('id', input.id).select().single()
+      : supabase.from('milestones').insert(payload as never).select().single()
     const { data, error } = await withTimeout(query)
     if (error) throw error
     return mapMilestone(data as DbMilestone)
   },
 
   async deleteMilestone(id: string): Promise<void> {
-    const { error } = await withTimeout(supabaseAdmin.from('milestones').delete().eq('id', id))
+    const { error } = await withTimeout(supabase.from('milestones').delete().eq('id', id))
     if (error) throw error
   },
 }

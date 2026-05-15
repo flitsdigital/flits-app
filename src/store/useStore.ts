@@ -4,10 +4,10 @@ import { enrichClient } from '../lib/billing'
 import { db, postDb, postLogDb, clientInvoiceDb } from '../lib/db'
 import { errorMessage } from '../lib/errors'
 import { useAuthStore } from './useAuthStore'
+import { newId } from '../lib/id'
+import { markClientsSynced, markFullBootstrap } from '../lib/storeFreshness'
 
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 10)
-}
+let fetchClientsInFlight: Promise<void> | null = null
 
 function loadFromLocalStorage(): Client[] | null {
   try {
@@ -29,6 +29,7 @@ interface StoreState {
   initialized: boolean
   error: string | null
   fetchClients: () => Promise<void>
+  fetchClientsOnly: () => Promise<void>
   addClient: (data: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'nextInvoiceDate' | 'lastInvoiceDate'>) => Promise<Client>
   updateClient: (id: string, data: Partial<Client>) => Promise<void>
   deleteClient: (id: string) => Promise<void>
@@ -51,39 +52,58 @@ export const useStore = create<StoreState>()((set, get) => ({
   initialized: false,
   error: null,
 
-  fetchClients: async () => {
+  fetchClientsOnly: async () => {
     try {
-      let clients = await db.fetchAll()
-
-      // Migreer lokale data naar Supabase als de database leeg is
-      if (clients.length === 0) {
-        const local = loadFromLocalStorage()
-        if (local && local.length > 0) {
-          const enriched = local.map((c) =>
-            enrichClient({
-              ...(c as Client),
-              clientType: (c as Client).clientType ?? 'recurring',
-              billingCycle: (c as Client).billingCycle ?? '6_weeks',
-              pricePerCycle:
-                typeof (c as Client).pricePerCycle === 'number'
-                  ? (c as Client).pricePerCycle
-                  : 0,
-            } as Client),
-          )
-          await db.upsertMany(enriched)
-          clients = await db.fetchAll()
-          localStorage.removeItem('agency-crm-v1')
-        }
-      }
-
-      const [posts, clientInvoices] = await Promise.all([
-        postDb.fetchAll(),
-        clientInvoiceDb.fetchAll().catch(() => [] as ClientInvoice[]),
-      ])
-      set({ clients, posts, clientInvoices, initialized: true, error: null })
+      const clients = await db.fetchAll()
+      set({ clients, error: null })
+      markClientsSynced()
     } catch (e) {
-      set({ initialized: true, error: errorMessage(e) })
+      set({ error: errorMessage(e) })
     }
+  },
+
+  fetchClients: async () => {
+    if (fetchClientsInFlight) return fetchClientsInFlight
+
+    fetchClientsInFlight = (async () => {
+      try {
+        let clients = await db.fetchAll()
+
+        // Migreer lokale data naar Supabase als de database leeg is
+        if (clients.length === 0) {
+          const local = loadFromLocalStorage()
+          if (local && local.length > 0) {
+            const enriched = local.map((c) =>
+              enrichClient({
+                ...(c as Client),
+                clientType: (c as Client).clientType ?? 'recurring',
+                billingCycle: (c as Client).billingCycle ?? '6_weeks',
+                pricePerCycle:
+                  typeof (c as Client).pricePerCycle === 'number'
+                    ? (c as Client).pricePerCycle
+                    : 0,
+              } as Client),
+            )
+            await db.upsertMany(enriched)
+            clients = await db.fetchAll()
+            localStorage.removeItem('agency-crm-v1')
+          }
+        }
+
+        const [posts, clientInvoices] = await Promise.all([
+          postDb.fetchAll(),
+          clientInvoiceDb.fetchAll().catch(() => [] as ClientInvoice[]),
+        ])
+        set({ clients, posts, clientInvoices, initialized: true, error: null })
+        markFullBootstrap()
+      } catch (e) {
+        set({ initialized: true, error: errorMessage(e) })
+      }
+    })().finally(() => {
+      fetchClientsInFlight = null
+    })
+
+    return fetchClientsInFlight
   },
 
   addClient: async (data) => {
@@ -93,7 +113,7 @@ export const useStore = create<StoreState>()((set, get) => ({
       clientType: data.clientType ?? 'recurring',
       billingCycle: data.billingCycle ?? '6_weeks',
       pricePerCycle: typeof data.pricePerCycle === 'number' ? data.pricePerCycle : 0,
-      id: generateId(),
+      id: newId(),
       createdAt: now,
       updatedAt: now,
     } as Client)
@@ -131,7 +151,7 @@ export const useStore = create<StoreState>()((set, get) => ({
     const actor = useAuthStore.getState().session?.user
     const post: Post = {
       ...data,
-      id: generateId(),
+      id: newId(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -152,7 +172,7 @@ export const useStore = create<StoreState>()((set, get) => ({
     const now = new Date().toISOString()
     const posts: Post[] = postsInput.map((data) => ({
       ...data,
-      id: generateId(),
+      id: newId(),
       createdAt: now,
       updatedAt: now,
     }))
@@ -292,7 +312,7 @@ export const useStore = create<StoreState>()((set, get) => ({
     const now = new Date().toISOString()
     const inv: ClientInvoice = {
       ...data,
-      id: generateId(),
+      id: newId(),
       createdAt: now,
       updatedAt: now,
     }

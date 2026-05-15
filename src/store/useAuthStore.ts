@@ -3,6 +3,9 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase, withTimeout } from '../lib/supabase'
 import type { UserProfile } from '../types'
 import { useStore } from './useStore'
+import { invalidateAppCaches } from '../lib/appCaches'
+import { resetStoreFreshness } from '../lib/storeFreshness'
+import { clearLeadsCache } from '../lib/leadsCache'
 
 const PROFILE_CACHE_KEY = 'flits-cached-profile'
 
@@ -20,20 +23,31 @@ interface AuthStore {
   refreshProfile: () => Promise<void>
 }
 
+const profileInflight = new Map<string, Promise<UserProfile | null>>()
+
 async function fetchProfileById(userId: string): Promise<UserProfile | null> {
-  try {
-    const { data, error } = await withTimeout(
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      12_000,
-    )
-    if (error) return null
-    const profile = (data as UserProfile) ?? null
-    // Cache for instant next load
-    if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
-    return profile
-  } catch {
-    return null
-  }
+  const existing = profileInflight.get(userId)
+  if (existing) return existing
+
+  const promise = (async () => {
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        12_000,
+      )
+      if (error) return null
+      const profile = (data as UserProfile) ?? null
+      if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
+      return profile
+    } catch {
+      return null
+    }
+  })().finally(() => {
+    profileInflight.delete(userId)
+  })
+
+  profileInflight.set(userId, promise)
+  return promise
 }
 
 /** Read cached profile synchronously from localStorage — no network needed. */
@@ -178,6 +192,9 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut()
     localStorage.removeItem(PROFILE_CACHE_KEY)
+    invalidateAppCaches()
+    resetStoreFreshness()
+    clearLeadsCache()
     useStore.setState({
       clients: [],
       posts: [],
@@ -191,7 +208,9 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
   refreshProfile: async () => {
     const { session } = get()
     if (!session) return
+    profileInflight.delete(session.user.id)
     const profile = await fetchProfileById(session.user.id)
+    invalidateAppCaches()
     set({ profile })
   },
 }))

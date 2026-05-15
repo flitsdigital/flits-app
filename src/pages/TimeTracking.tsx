@@ -14,7 +14,7 @@ import {
   isToday,
   format,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Play, Square, Plus, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '../store/useStore'

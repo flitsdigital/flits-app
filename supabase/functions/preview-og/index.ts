@@ -11,14 +11,12 @@ function esc(str: string): string {
 }
 
 Deno.serve(async (req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' },
     })
   }
 
-  // Extract postId from path: /preview-og/<postId>
   const url = new URL(req.url)
   const postId = url.pathname.split('/').filter(Boolean).pop()
 
@@ -31,25 +29,27 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  const [{ data: post }, ] = await Promise.all([
-    supabase
-      .from('posts')
-      .select('id, client_id, caption, media_url, media_urls, date, type')
-      .eq('id', postId)
-      .single(),
-  ])
+  const { data: row } = await supabase
+    .from('posts')
+    .select('id, client_id, caption, media_url, media_urls, date, type, clients ( company_name )')
+    .eq('id', postId)
+    .single()
 
-  if (!post) {
+  if (!row) {
     return new Response('Not found', { status: 404 })
   }
 
-  const { data: client } = await supabase
-    .from('clients')
-    .select('company_name')
-    .eq('id', post.client_id)
-    .single()
+  const clientJoin = row.clients as { company_name?: string } | { company_name?: string }[] | null
+  const clientName: string = (Array.isArray(clientJoin)
+    ? clientJoin[0]?.company_name
+    : clientJoin?.company_name) ?? 'Klant'
 
-  const clientName: string = client?.company_name ?? 'Klant'
+  const post = row as {
+    media_urls?: string[] | null
+    media_url?: string | null
+    caption?: string | null
+  }
+
   const imageUrl: string = (post.media_urls?.[0] ?? post.media_url) ?? ''
   const caption: string = post.caption ?? ''
   const shortCaption = caption.length > 200 ? caption.slice(0, 197) + '…' : caption
@@ -63,7 +63,6 @@ Deno.serve(async (req) => {
   <meta charset="utf-8" />
   <title>${esc(title)}</title>
 
-  <!-- Open Graph -->
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="Flits Digital" />
   <meta property="og:url"         content="${esc(appUrl)}" />
@@ -73,13 +72,11 @@ Deno.serve(async (req) => {
   <meta property="og:image:width"  content="1080" />
   <meta property="og:image:height" content="1080" />` : ''}
 
-  <!-- Twitter / X card -->
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="${esc(title)}" />
   <meta name="twitter:description" content="${esc(description)}" />
   ${imageUrl ? `<meta name="twitter:image" content="${esc(imageUrl)}" />` : ''}
 
-  <!-- Redirect browsers to the React app immediately -->
   <meta http-equiv="refresh" content="0; url=${esc(appUrl)}" />
   <script>window.location.replace(${JSON.stringify(appUrl)})</script>
 </head>

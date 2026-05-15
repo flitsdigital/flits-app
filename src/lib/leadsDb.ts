@@ -87,7 +87,7 @@ export const leadsDb = {
   async fetchAll(): Promise<Lead[]> {
     const { data, error } = await withTimeout(
       supabase
-        .from('leads')
+        .from('leads_app')
         .select('*')
         .order('created_at', { ascending: false }),
       15_000,
@@ -99,7 +99,7 @@ export const leadsDb = {
   async fetchOne(id: string): Promise<Lead | null> {
     const { data, error } = await withTimeout(
       supabase
-        .from('leads')
+        .from('leads_app')
         .select('*')
         .eq('id', id)
         .maybeSingle()

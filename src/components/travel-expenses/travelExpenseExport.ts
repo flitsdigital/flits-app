@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import type { TravelExpense, UserProfile } from '../../types'
 import { amount, fmt, totalKm } from './travelExpenseMoney'
 

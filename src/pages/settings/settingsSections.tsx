@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { User, Shield, Plus, Pencil, Trash2, Camera, X, Eye, EyeOff, Check } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase, supabaseAdmin } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { errorMessage } from '../../lib/errors'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useAppearanceStore, ACCENT_OPTIONS, type AccentColor } from '../../store/useAppearanceStore'
@@ -28,7 +28,7 @@ export function ProfielSection() {
   async function saveName(e: React.FormEvent) {
     e.preventDefault()
     setNameLoading(true)
-    const { error } = await supabaseAdmin.from('profiles').update({ name: name || null } as never).eq('id', profile!.id)
+    const { error } = await supabase.from('profiles').update({ name: name || null, updated_at: new Date().toISOString() } as never).eq('id', profile!.id)
     if (error) toast.error('Mislukt', { description: error.message })
     else { toast.success('Naam opgeslagen'); await refreshProfile() }
     setNameLoading(false)
@@ -85,7 +85,7 @@ export function ProfielSection() {
       if (uploadErr) throw uploadErr
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
       const url = `${publicUrl}?t=${Date.now()}`
-      const { error: updateErr } = await supabaseAdmin.from('profiles').update({ avatar_url: url } as never).eq('id', profile.id)
+      const { error: updateErr } = await supabase.from('profiles').update({ avatar_url: url, updated_at: new Date().toISOString() } as never).eq('id', profile.id)
       if (updateErr) throw updateErr
       toast.success('Avatar opgeslagen')
       await refreshProfile()
@@ -100,7 +100,7 @@ export function ProfielSection() {
   async function removeAvatar() {
     if (!profile) return
     setAvatarLoading(true)
-    await supabaseAdmin.from('profiles').update({ avatar_url: null } as never).eq('id', profile.id)
+    await supabase.from('profiles').update({ avatar_url: null, updated_at: new Date().toISOString() } as never).eq('id', profile.id)
     toast.success('Avatar verwijderd')
     await refreshProfile()
     setAvatarLoading(false)
@@ -325,7 +325,7 @@ export function GebruikersSection() {
 
   async function loadUsers() {
     setLoading(true)
-    const { data } = await supabaseAdmin.from('profiles').select('*').order('created_at')
+    const { data } = await supabase.from('profiles').select('*').order('created_at')
     setUsers(data ?? [])
     setLoading(false)
   }

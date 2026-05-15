@@ -1,4 +1,5 @@
-import { supabase, supabaseAdmin, withTimeout } from './supabase'
+import { supabase, withTimeout } from './supabase'
+import { fetchProfilesAdminCached } from './appCaches'
 import type { TimeEntry, TimeTag, UserProfile } from '../types'
 
 // ── DB row types ───────────────────────────────────────────────────────────────
@@ -92,11 +93,7 @@ export const timeTrackingDb = {
   // ── Users ─────────────────────────────────────────────────────────────────
 
   async fetchUsers(): Promise<UserProfile[]> {
-    const { data, error } = await withTimeout(
-      supabaseAdmin.from('profiles').select('*').order('email'),
-    )
-    if (error) throw error
-    return data ?? []
+    return fetchProfilesAdminCached()
   },
 
   // ── Entries ───────────────────────────────────────────────────────────────
@@ -105,9 +102,7 @@ export const timeTrackingDb = {
     isAdmin: boolean
     selectedUserId?: string | 'all'
   }): Promise<TimeEntry[]> {
-    const query = input.isAdmin
-      ? supabaseAdmin.from('time_entries').select('*').order('started_at', { ascending: false })
-      : supabase.from('time_entries').select('*').order('started_at', { ascending: false })
+    let query = supabase.from('time_entries').select('*').order('started_at', { ascending: false })
 
     const filtered =
       input.isAdmin && input.selectedUserId && input.selectedUserId !== 'all'
@@ -239,15 +234,14 @@ export const timeTrackingDb = {
 
   async fetchEntriesForTask(taskId: string): Promise<TimeEntry[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin.from('time_entries').select('*').eq('task_id', taskId).order('started_at', { ascending: false })
+      supabase.from('time_entries').select('*').eq('task_id', taskId).order('started_at', { ascending: false })
     )
     if (error) throw error
     return (data as DbTimeEntry[] ?? []).map(entryFromRow)
   },
 
-  async deleteEntry(id: string, isAdmin: boolean): Promise<void> {
-    const client = isAdmin ? supabaseAdmin : supabase
-    const { error } = await withTimeout(client.from('time_entries').delete().eq('id', id))
+  async deleteEntry(id: string, _isAdmin: boolean): Promise<void> {
+    const { error } = await withTimeout(supabase.from('time_entries').delete().eq('id', id))
     if (error) throw error
   },
 }

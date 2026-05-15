@@ -12,7 +12,7 @@ import {
   subWeeks,
   format,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 
 export interface DateRange {
   start: Date

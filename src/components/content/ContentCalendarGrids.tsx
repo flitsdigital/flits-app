@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { format, isSameMonth, isSameDay, isToday } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import type { Post } from '../../types'
 import { WEEKDAYS } from './contentConstants'

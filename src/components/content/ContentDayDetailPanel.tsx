@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Plus } from 'lucide-react'
 import type { Post } from '../../types'
 import { ContentPostCard } from './ContentPostTiles'

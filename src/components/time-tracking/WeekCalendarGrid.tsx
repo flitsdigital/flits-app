@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { format, isToday, parseISO } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { cn } from '@/lib/utils'
 import type { TimeEntry, TimeTag } from '../../types'
 import { HOUR_PX, SLOT_MINS, SLOT_PX } from './timeTrackingConstants'

@@ -1,6 +1,6 @@
 import { Circle, CircleDot, Eye, CheckCircle2, Flag, Calendar, User, Zap, Tag } from 'lucide-react'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { cn } from '@/lib/utils'
 import { PillDropdown } from '@/components/ui/pill-dropdown'
 import type { Task, TaskStatus, TaskPriority, ProjectLabel } from '../../types'

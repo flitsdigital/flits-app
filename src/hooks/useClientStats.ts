@@ -9,7 +9,9 @@ export function useClientStatsForClient(
   weekRef?: Date,
 ): ComputedClientStats | null {
   const invoices = useStore((s) => s.clientInvoices)
-  const posts = useStore((s) => s.posts)
+  const posts = useStore((s) =>
+    client ? s.posts.filter((p) => p.clientId === client.id) : [],
+  )
 
   return useMemo(() => {
     if (!client) return null

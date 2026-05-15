@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import type { ProjectActivity } from '../../lib/projectsDb'
 import { UserAvatar } from '../UserAvatar'
 

@@ -1,4 +1,4 @@
-import { supabaseAdmin, withTimeout } from './supabase'
+import { supabase, withTimeout } from './supabase'
 
 export interface Notification {
   id: string
@@ -44,7 +44,7 @@ function mapNotif(row: DbNotification): Notification {
 export const notificationsDb = {
   async fetchForUser(userId: string): Promise<Notification[]> {
     const { data, error } = await withTimeout(
-      supabaseAdmin
+      supabase
         .from('notifications')
         .select('*')
         .eq('user_id', userId)
@@ -75,20 +75,20 @@ export const notificationsDb = {
       context_url: input.contextUrl ?? null,
       read: false,
     }
-    const { error } = await withTimeout(supabaseAdmin.from('notifications').insert(payload as never))
+    const { error } = await withTimeout(supabase.from('notifications').insert(payload as never))
     if (error) throw error
   },
 
   async markRead(id: string): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('notifications').update({ read: true } as never).eq('id', id)
+      supabase.from('notifications').update({ read: true } as never).eq('id', id)
     )
     if (error) throw error
   },
 
   async markAllRead(userId: string): Promise<void> {
     const { error } = await withTimeout(
-      supabaseAdmin.from('notifications').update({ read: true } as never).eq('user_id', userId).eq('read', false)
+      supabase.from('notifications').update({ read: true } as never).eq('user_id', userId).eq('read', false)
     )
     if (error) throw error
   },

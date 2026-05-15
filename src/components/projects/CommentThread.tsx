@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MentionTextarea } from '../MentionTextarea'

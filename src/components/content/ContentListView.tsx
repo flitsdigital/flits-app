@@ -1,6 +1,6 @@
 import type { Dispatch, MouseEvent, SetStateAction } from 'react'
 import { format, parseISO, isToday } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import type { Post } from '../../types'
 import { TYPE_ICON, normalizePostStatus } from './contentConstants'
 import {

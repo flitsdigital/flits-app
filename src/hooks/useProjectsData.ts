@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { projectsDb } from '../lib/projectsDb'
+import { projectsListCache } from '../lib/appCaches'
 import { useAuthStore } from '../store/useAuthStore'
 import type { Project, Task, TaskStatus } from '../types'
 
@@ -21,8 +22,8 @@ export function useProjectsData() {
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [allTasksLoading, setAllTasksLoading] = useState(false)
 
-  const loadAll = useCallback(async () => {
-    setLoading(true)
+  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     const [projData, taskData, profileData] = await Promise.all([
       projectsDb.fetchProjects(),
       projectsDb.fetchTaskRefs(),
@@ -41,7 +42,8 @@ export function useProjectsData() {
 
   useEffect(() => {
     if (!authReady || !sessionUserId) return
-    loadAll()
+    const hasData = !!projectsListCache.get()
+    void loadAll({ silent: hasData })
   }, [loadAll, authReady, sessionUserId])
 
   async function loadProjectTasks(projectId: string) {

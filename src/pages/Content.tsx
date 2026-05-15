@@ -16,7 +16,7 @@ import {
   parseISO,
   isToday,
 } from "date-fns";
-import { nl } from "date-fns/locale";
+import { nl } from 'date-fns/locale/nl'
 import clsx from "clsx";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
+import { copyPostPreviewLink } from "../lib/previewLink";
 import { PostForm } from "../components/PostForm";
 import { PageHeader } from "../components/PageHeader";
 import { useIsMobile } from "../hooks/useBreakpoint";
@@ -208,21 +209,14 @@ export function Content() {
     viewMode === "month" ? monthStats : weekStats;
 
   async function copyPreviewLink(postId: string) {
-    // Use the Supabase Edge Function URL so social platforms (WhatsApp, Telegram)
-    // get proper Open Graph tags (post image + client name).
-    // The edge function redirects real browsers back to the React app.
-    const ogBase = import.meta.env.VITE_SUPABASE_URL as string
-    const link = `${ogBase}/functions/v1/preview-og/${postId}`;
-    try {
-      await navigator.clipboard.writeText(link);
+    const ok = await copyPostPreviewLink(postId, { socialOg: true });
+    if (ok) {
       setCopiedPostId(postId);
       window.setTimeout(
         () =>
           setCopiedPostId((current) => (current === postId ? null : current)),
         1800,
       );
-    } catch {
-      window.prompt("Kopieer deze preview link:", link);
     }
   }
 

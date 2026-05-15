@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { format, parseISO, eachDayOfInterval, addWeeks, getDay } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import clsx from 'clsx'
 import { toast } from 'sonner'
 import { Plus, X, Check, CalendarRange, ChevronsUpDown } from 'lucide-react'

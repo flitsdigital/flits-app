@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import {
   Image, Video, Film, Square, Layers, Upload, Loader2,
   ExternalLink, GripVertical, Share2, Copy, Trash2, X, Bold,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { Post, PostType, PostStatus, Client } from '../types'
 import { supabase } from '../lib/supabase'
+import { copyPostPreviewLink } from '../lib/previewLink'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
@@ -190,7 +191,10 @@ export function PostForm({
     const fileName = `${form.clientId}/${crypto.randomUUID()}.${extension}`
 
     const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token ?? anonKey
+    const token = sessionData?.session?.access_token
+    if (!token) {
+      throw new Error('Je moet ingelogd zijn om media te uploaden.')
+    }
 
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 30_000)
@@ -308,13 +312,10 @@ export function PostForm({
 
   async function copyPreviewLink() {
     if (!sharePostId) return
-    const link = `${window.location.origin}/preview/${sharePostId}`
-    try {
-      await navigator.clipboard.writeText(link)
+    const ok = await copyPostPreviewLink(sharePostId)
+    if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      window.prompt('Kopieer deze preview link:', link)
     }
   }
 

@@ -10,7 +10,7 @@ import {
   startOfMonth,
   isSameMonth,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { useStore } from '../store/useStore'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { getInvoiceTimeline, getInvoiceStatus, formatWeek } from '../lib/billing'

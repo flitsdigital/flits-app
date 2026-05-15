@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { X, Plus, Check, ChevronDown, ChevronRight, Calendar, Trash2, Link2 } from 'lucide-react'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { DatePickerButton } from '@/components/ui/date-picker-button'
@@ -76,16 +76,17 @@ function TodoRow({
   onToggle,
   onDelete,
   onUpdateNotes,
+  reloadNotifs,
 }: {
   todo: Todo
   onToggle: () => void
   onDelete: () => void
   onUpdateNotes: (notes: string) => void
+  reloadNotifs: () => Promise<void>
 }) {
   const [expanded, setExpanded] = useState(false)
   const [notes, setNotes] = useState(todo.notes ?? '')
   const profile = useAuthStore((s) => s.profile)
-  const { reload: reloadNotifs } = useNotifications()
 
   const isOverdue =
     todo.dueDate && !todo.done && new Date(todo.dueDate + 'T00:00:00') < new Date()
@@ -215,6 +216,7 @@ export function TodoSheet() {
   const todoOpen = useUIStore((s) => s.todoOpen)
   const closeTodo = useUIStore((s) => s.closeTodo)
   const { todos, loading, addTodo, toggleDone, updateNotes, deleteTodo } = useTodosData()
+  const { reload: reloadNotifs } = useNotifications()
   const [showDone, setShowDone] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
@@ -269,6 +271,7 @@ export function TodoSheet() {
                     onToggle={() => toggleDone(t.id)}
                     onDelete={() => deleteTodo(t.id)}
                     onUpdateNotes={(n) => updateNotes(t.id, n)}
+                    reloadNotifs={reloadNotifs}
                   />
                 ))}
               </div>
@@ -291,6 +294,7 @@ export function TodoSheet() {
                     onToggle={() => toggleDone(t.id)}
                     onDelete={() => deleteTodo(t.id)}
                     onUpdateNotes={(n) => updateNotes(t.id, n)}
+                    reloadNotifs={reloadNotifs}
                   />
                 ))}
               </div>
@@ -321,6 +325,7 @@ export function TodoSheet() {
                       onToggle={() => toggleDone(t.id)}
                       onDelete={() => deleteTodo(t.id)}
                       onUpdateNotes={(n) => updateNotes(t.id, n)}
+                      reloadNotifs={reloadNotifs}
                     />
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { Plus, X, Trash2, Check, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { travelExpensesDb } from '../../lib/travelExpensesDb'

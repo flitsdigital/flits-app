@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import clsx from 'clsx'
 import { format, parseISO } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import type { Post, PostStatus } from '../../types'
 import { postStatusChipColor, postTypeLabel } from '../../lib/postHelpers'
 import { TYPE_ICON, POST_KANBAN_COLS, normalizePostStatus } from './contentConstants'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Eye, EyeOff, Camera, Plus, Shield, User as UserIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase, supabaseAdmin } from '../../lib/supabase'
+import { adminUsersApi } from '../../lib/edgeApi'
 import { errorMessage } from '../../lib/errors'
 import type { UserProfile, AppPage, UserRole, FeatureFlag } from '../../types'
 import { Button } from '@/components/ui/button'
@@ -51,29 +51,23 @@ export function UserModal({ open, user, onClose, onSaved }: {
     setLoading(true)
     try {
       if (isEdit) {
-        const { error: profileErr } = await supabaseAdmin.from('profiles').update({
-          name: name || null, role,
+        await adminUsersApi.update({
+          userId: user!.id,
+          name: name || null,
+          role,
           allowed_pages: role === 'admin' ? [] : allowedPages,
           allowed_features: role === 'admin' ? [] : allowedFeatures,
-          updated_at: new Date().toISOString(),
-        } as never).eq('id', user!.id)
-        if (profileErr) throw profileErr
-        if (password) {
-          const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(user!.id, { password })
-          if (pwErr) throw pwErr
-        }
-      } else {
-        const { data, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-          email, password, email_confirm: true,
-          user_metadata: { name: name || undefined },
+          password: password || undefined,
         })
-        if (createErr) throw createErr
-        const { error: profileErr } = await supabaseAdmin.from('profiles').update({
-          name: name || null, role,
+      } else {
+        await adminUsersApi.create({
+          email,
+          password,
+          name: name || null,
+          role,
           allowed_pages: role === 'admin' ? [] : allowedPages,
           allowed_features: role === 'admin' ? [] : allowedFeatures,
-        } as never).eq('id', data.user.id)
-        if (profileErr) throw profileErr
+        })
       }
       onSaved(); onClose()
     } catch (err) {
@@ -194,8 +188,13 @@ export function DeleteConfirm({ open, user, onClose, onDeleted }: {
   async function handleDelete() {
     if (!user) return
     setLoading(true)
-    const { error: err } = await supabaseAdmin.auth.admin.deleteUser(user.id)
-    if (err) { setError(err.message); setLoading(false); return }
+    try {
+      await adminUsersApi.delete(user.id)
+    } catch (err) {
+      setError(errorMessage(err))
+      setLoading(false)
+      return
+    }
     onDeleted(); onClose()
   }
   return (

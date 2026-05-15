@@ -42,38 +42,5 @@ export const supabase = createClient(
   { auth: { lock: noopLock } },
 )
 
-// ⚠️  SECURITY NOTE: VITE_SUPABASE_SERVICE_ROLE_KEY is bundled into the client
-// and is therefore visible to anyone who inspects the network traffic or JS bundle.
-// This bypasses Row Level Security. Move admin operations to a Supabase Edge
-// Function or server-side API so the service role key never leaves the server.
-let _admin: ReturnType<typeof createClient> | null = null
-
-export function getSupabaseAdmin() {
-  if (!_admin) {
-    const key = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY as string
-    if (!key) throw new Error('VITE_SUPABASE_SERVICE_ROLE_KEY is niet ingesteld in .env')
-    _admin = createClient(
-      import.meta.env.VITE_SUPABASE_URL as string,
-      key,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          storageKey: 'sb-admin',
-          // Use a no-op lock: the admin client never refreshes tokens,
-          // so sharing processLock with the regular client caused both
-          // to deadlock — each timing out waiting for the other's lock.
-          lock: noopLock,
-        },
-      },
-    )
-  }
-  return _admin
-}
-
-// Backwards-compat export voor bestaande imports
-export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_target, prop) {
-    return (getSupabaseAdmin() as never)[prop]
-  },
-})
+// Admin operations (user management, external post preview) run via Supabase Edge
+// Functions with the service role key — never expose it in VITE_* env vars.

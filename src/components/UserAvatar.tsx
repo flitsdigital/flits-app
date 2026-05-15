@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 
@@ -28,13 +29,20 @@ function getInitials(profile: AvatarProfile): string {
     .toUpperCase()
 }
 
-export function UserAvatar({ profile, size = 'w-6 h-6', className, textSize = 'text-[10px]' }: Props) {
+export const UserAvatar = memo(function UserAvatar({
+  profile,
+  size = 'w-6 h-6',
+  className,
+  textSize = 'text-[10px]',
+}: Props) {
   const initials = profile ? getInitials(profile) : '?'
 
   return (
     <Avatar className={cn(size, className)}>
       <AvatarImage
         src={profile?.avatar_url ?? undefined}
+        loading="lazy"
+        decoding="async"
         className="object-cover"
       />
       <AvatarFallback
@@ -47,4 +55,4 @@ export function UserAvatar({ profile, size = 'w-6 h-6', className, textSize = 't
       </AvatarFallback>
     </Avatar>
   )
-}
+})

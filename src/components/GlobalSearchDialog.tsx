@@ -19,6 +19,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { useStore } from '../store/useStore'
 import { filterNavForUser, SETTINGS_NAV } from '../lib/nav'
 import { leadsDb } from '../lib/leadsDb'
+import { readLeadsCache } from '../lib/leadsCache'
 import type { Lead, Post } from '../types'
 
 function postSearchValue(post: Post, clientName: string): string {
@@ -54,6 +55,11 @@ export function GlobalSearchDialog() {
 
   useEffect(() => {
     if (!open || !session) return
+    const cached = readLeadsCache(session.user.id)
+    if (cached.length > 0) {
+      setLeads(cached)
+      return
+    }
     let cancelled = false
     void leadsDb.fetchAll().then((data) => {
       if (!cancelled) setLeads(data)

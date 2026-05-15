@@ -6,14 +6,14 @@ import {
   MessageSquare, Zap, TriangleAlert, BadgeCheck, Timer,
 } from 'lucide-react'
 import { parseISO, differenceInDays, startOfDay, format, startOfWeek, endOfWeek } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { useStore } from '../store/useStore'
 import { useLeadsData } from '../hooks/useLeadsData'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useAuthStore } from '../store/useAuthStore'
 import { getInvoiceStatus, formatWeek, formatWeekDate, calcMonthlyRevenue } from '../lib/billing'
 import { postStatusLabel, postStatusDot } from '../lib/postHelpers'
-import { LEAD_STATUS_CONFIG } from './Leads'
+import { LEAD_STATUS_CONFIG } from '../lib/leadStatusConfig'
 import { StatusBadge } from '../components/StatusBadge'
 import { InvoiceBadge } from '../components/InvoiceBadge'
 import { PageHeader } from '../components/PageHeader'
@@ -61,7 +61,7 @@ export function Dashboard() {
   // Always call hooks — data simply won't be rendered if no access
   const clients = useStore((s) => s.clients)
   const posts   = useStore((s) => s.posts)
-  const { leads } = useLeadsData()
+  const { leads } = useLeadsData({ enabled: hasLeads })
 
   const today = startOfDay(new Date())
 

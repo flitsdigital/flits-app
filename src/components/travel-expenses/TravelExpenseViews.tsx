@@ -9,7 +9,7 @@ import {
   isToday,
   parseISO,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import clsx from 'clsx'
 import { Plus, Check, ArrowRight, RotateCcw } from 'lucide-react'
 import type { TravelExpense, UserProfile } from '../../types'

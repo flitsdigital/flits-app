@@ -100,7 +100,7 @@ function toRow(client: Client): Record<string, unknown> {
 export const db = {
   async fetchAll(): Promise<Client[]> {
     const { data, error } = await withTimeout(
-      supabase.from('clients').select('*').order('company_name'),
+      supabase.from('clients_app').select('*').order('company_name'),
       15_000,
     )
     if (error) throw error

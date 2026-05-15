@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import type { Sprint } from '../../lib/projectsDb'
 
 interface Props {

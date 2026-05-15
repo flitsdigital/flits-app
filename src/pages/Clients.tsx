@@ -23,12 +23,15 @@ import { SearchInput } from '../components/SearchInput'
 import { InitialsAvatar } from '../components/InitialsAvatar'
 import { ActionMenu } from '../components/ActionMenu'
 import { ListTable, ListHeader, SortButton, ListBody, ListEmpty } from '../components/ListTable'
+import { usePermissions } from '../hooks/usePermissions'
 
 type SortKey = 'companyName' | 'nextInvoiceDate' | 'pricePerCycle' | 'status'
 type Filter = 'all' | 'active' | 'paused' | 'inactive'
 
 export function Clients() {
   usePageMeta('Klanten → Flits Impact', 'Beheer je klanten, contracten en facturatie.')
+  const { can } = usePermissions()
+  const showFinancials = can('financials')
   const { clients, addClient, updateClient, addClientInvoice, clientInvoices, posts } = useStore()
   const clientsTypeSegment = useUIStore((s) => s.clientsTypeSegment)
   const setClientsTypeSegment = useUIStore((s) => s.setClientsTypeSegment)
@@ -257,17 +260,17 @@ export function Clients() {
             <span className="text-text-muted whitespace-nowrap shrink-0">
               {kpi.count} in segment · {kpi.active} actief
             </span>
-            {clientsTypeSegment === 'recurring' || clientsTypeSegment === 'all' ? (
+            {showFinancials && (clientsTypeSegment === 'recurring' || clientsTypeSegment === 'all') ? (
               <span className="text-text-muted whitespace-nowrap shrink-0">
                 MRR (retainer): ca. €{Math.round(kpi.mrr).toLocaleString('nl-NL')}/mnd
               </span>
             ) : null}
-            {clientsTypeSegment === 'project' ? (
+            {showFinancials && clientsTypeSegment === 'project' ? (
               <span className="text-text-muted whitespace-nowrap shrink-0">
                 Totaal budget (actief): €{kpi.projectTotalBudget.toLocaleString('nl-NL')}
               </span>
             ) : null}
-            {(clientsTypeSegment === 'project' ||
+            {showFinancials && (clientsTypeSegment === 'project' ||
               clientsTypeSegment === 'oneoff' ||
               clientsTypeSegment === 'all') && (
               <span className="text-text-muted whitespace-nowrap shrink-0">Openstaand: €{kpi.open.toLocaleString('nl-NL')}</span>
@@ -336,13 +339,22 @@ export function Clients() {
 
         <ListTable>
           {/* Desktop kolomkoppen */}
-          <ListHeader className="hidden lg:flex grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px_60px]">
+          <ListHeader
+            className={cn(
+              'hidden lg:flex',
+              showFinancials
+                ? 'grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px_60px]'
+                : 'grid-cols-[minmax(0,1.2fr)_100px_100px_140px_120px]',
+            )}
+          >
             <div className="flex-[1.2] min-w-0"><SortBtn k="companyName" label="Klant" /></div>
             <div className="w-[100px] shrink-0"><span className="text-xs text-text-muted">Soort</span></div>
             <div className="w-[100px] shrink-0"><SortBtn k="status" label="Status" /></div>
             <div className="w-[140px] shrink-0"><span className="text-xs text-text-muted">Cyclus / termijn</span></div>
             <div className="w-[120px] shrink-0"><SortBtn k="nextInvoiceDate" label="Volgende factuur" /></div>
-            <div className="w-[60px] shrink-0"><SortBtn k="pricePerCycle" label="Prijs" /></div>
+            {showFinancials && (
+              <div className="w-[60px] shrink-0"><SortBtn k="pricePerCycle" label="Prijs" /></div>
+            )}
             <div className="w-8 shrink-0" />
           </ListHeader>
 
@@ -401,7 +413,8 @@ export function Clients() {
                           <div>
                             <p className="text-sm font-medium text-text-primary truncate">{nextM.label}</p>
                             <p className="text-xs text-text-muted mt-0.5">
-                              €{nextM.amount.toLocaleString('nl-NL')} · {formatWeekDate(nextM.dueDate)}
+                              {showFinancials && <>€{nextM.amount.toLocaleString('nl-NL')} · </>}
+                              {formatWeekDate(nextM.dueDate)}
                             </p>
                             <div className="mt-1">
                               <InvoiceBadge status={invoiceStatusOther} />
@@ -414,23 +427,25 @@ export function Clients() {
                         <span className="text-sm text-text-muted">—</span>
                       )}
                     </div>
-                    <div className="w-[60px] shrink-0 text-sm font-medium text-text-primary">
-                      {ct === 'recurring' && <>€{c.pricePerCycle.toLocaleString('nl-NL')}</>}
-                      {ct === 'project' && (
-                        <>
-                          €{(c.projectBudget ?? 0).toLocaleString('nl-NL')}
-                          {st?.progress != null && st.progress.total > 0 && (
-                            <span className="block h-1 w-full max-w-[72px] mt-1 rounded-full bg-surface-3 overflow-hidden">
-                              <span
-                                className="block h-full bg-green-500/80"
-                                style={{ width: `${Math.min(100, st.progress.pct)}%` }}
-                              />
-                            </span>
-                          )}
-                        </>
-                      )}
-                      {ct === 'oneoff' && <>€{(st?.singleInvoice?.amount ?? 0).toLocaleString('nl-NL')}</>}
-                    </div>
+                    {showFinancials ? (
+                      <div className="w-[60px] shrink-0 text-sm font-medium text-text-primary">
+                        {ct === 'recurring' && <>€{c.pricePerCycle.toLocaleString('nl-NL')}</>}
+                        {ct === 'project' && (
+                          <>
+                            €{(c.projectBudget ?? 0).toLocaleString('nl-NL')}
+                            {st?.progress != null && st.progress.total > 0 && (
+                              <span className="block h-1 w-full max-w-[72px] mt-1 rounded-full bg-surface-3 overflow-hidden">
+                                <span
+                                  className="block h-full bg-green-500/80"
+                                  style={{ width: `${Math.min(100, st.progress.pct)}%` }}
+                                />
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {ct === 'oneoff' && <>€{(st?.singleInvoice?.amount ?? 0).toLocaleString('nl-NL')}</>}
+                      </div>
+                    ) : null}
                     <div className="w-8 shrink-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.preventDefault()}>
                       <ActionMenu items={[{ label: 'Bewerken', icon: Edit2, onClick: () => { setEditClient(c); setShowForm(true) } }]} />
                     </div>

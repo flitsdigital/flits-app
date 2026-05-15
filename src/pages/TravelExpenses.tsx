@@ -4,7 +4,7 @@ import {
   addWeeks, subWeeks, addMonths, subMonths,
   format, parseISO, isWithinInterval,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import {
   Plus, Pencil, Trash2, X, ArrowRight, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Users, Download, FileText, Sheet, CalendarDays, SlidersHorizontal,
 } from 'lucide-react'

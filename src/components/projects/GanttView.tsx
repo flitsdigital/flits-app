@@ -3,7 +3,7 @@ import {
   addDays, differenceInDays, startOfDay, parseISO, format,
   startOfWeek, endOfWeek, isToday, addWeeks,
 } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { ZoomIn, ZoomOut, ChevronRight, ChevronDown, Folder, FolderOpen, Layers } from 'lucide-react'
 import clsx from 'clsx'
 import type { Milestone, Task, TaskStatus, TaskPriority } from '../../types'

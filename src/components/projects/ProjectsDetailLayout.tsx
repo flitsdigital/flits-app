@@ -1,7 +1,7 @@
 import { NavigateFunction } from 'react-router-dom'
 import { Plus, List, Zap, LayoutGrid, GanttChartSquare, Activity } from 'lucide-react'
 import { format } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import clsx from 'clsx'
 import type { UserProfileLite } from '../../hooks/useProjectsData'
 import type { Milestone, Project, Task, TaskStatus, TaskPriority, ProjectLabel } from '../../types'

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { projectsDb } from '../lib/projectsDb'
+import { fetchProfilesBasicCached } from '../lib/appCaches'
 
 interface Profile {
   id: string
@@ -102,7 +102,7 @@ export function MentionTextarea({
   }, [dropdownOpen, filtered.length, updateDropdownPosition, query, value])
 
   useEffect(() => {
-    projectsDb.fetchProfilesBasic().then(setProfiles).catch(() => {})
+    fetchProfilesBasicCached().then(setProfiles).catch(() => {})
   }, [])
 
   function insertMention(profile: Profile) {

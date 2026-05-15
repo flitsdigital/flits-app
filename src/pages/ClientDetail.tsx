@@ -26,8 +26,10 @@ import {
   FileText,
 } from "lucide-react";
 import { parseISO, format } from "date-fns";
-import { nl } from "date-fns/locale";
+import { nl } from 'date-fns/locale/nl'
 import { useStore } from "../store/useStore";
+import { copyPostPreviewLink } from "../lib/previewLink";
+import { usePermissions } from "../hooks/usePermissions";
 import { projectsDb } from "../lib/projectsDb";
 import { formatDate, formatWeek, formatWeekDate, formatCycle } from "../lib/billing";
 import { StatusBadge } from "../components/StatusBadge";
@@ -92,6 +94,8 @@ function StatPill({ children }: { children: React.ReactNode }) {
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  const showFinancials = can("financials");
   const {
     getClient,
     updateClient,
@@ -155,16 +159,13 @@ export function ClientDetail() {
   }
 
   async function copyPreviewLink(postId: string) {
-    const link = `${window.location.origin}/preview/${postId}`;
-    try {
-      await navigator.clipboard.writeText(link);
+    const ok = await copyPostPreviewLink(postId);
+    if (ok) {
       setCopiedPostId(postId);
       window.setTimeout(
         () => setCopiedPostId((cur) => (cur === postId ? null : cur)),
         1800,
       );
-    } catch {
-      window.prompt("Kopieer deze preview link:", link);
     }
   }
 
@@ -207,19 +208,19 @@ export function ClientDetail() {
                 </div>
                 {stats && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
+                    {showFinancials && ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
                       <>
                         <StatPill>Volgende: {formatWeek(client.nextInvoiceDate)} {formatWeekDate(client.nextInvoiceDate)}</StatPill>
                         <StatPill>€{client.pricePerCycle.toLocaleString("nl-NL")} / cyclus</StatPill>
                       </>
                     )}
-                    {ct === "project" && stats.progress && (
+                    {showFinancials && ct === "project" && stats.progress && (
                       <>
                         <StatPill>Voortgang {stats.progress.pct}% ({stats.progress.paidCount}/{stats.progress.totalCount} termijnen)</StatPill>
                         <StatPill>Open €{stats.openAmount.toLocaleString("nl-NL")}</StatPill>
                       </>
                     )}
-                    {ct === "oneoff" && stats.singleInvoice && (
+                    {showFinancials && ct === "oneoff" && stats.singleInvoice && (
                       <StatPill>
                         €{stats.singleInvoice.amount.toLocaleString("nl-NL")} — {formatDate(stats.singleInvoice.dueDate)} ({stats.singleInvoice.status})
                       </StatPill>
@@ -252,7 +253,9 @@ export function ClientDetail() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="h-8 bg-surface-2 border border-border-subtle p-0.5 gap-0.5">
             <TabsTrigger value="overview" className="text-xs h-7 px-3">Overzicht</TabsTrigger>
-            <TabsTrigger value="billing" className="text-xs h-7 px-3">Facturatie</TabsTrigger>
+            {showFinancials && (
+              <TabsTrigger value="billing" className="text-xs h-7 px-3">Facturatie</TabsTrigger>
+            )}
             <TabsTrigger value="content" className="text-xs h-7 px-3 gap-1.5">
               Content
               {clientPosts.length > 0 && (
@@ -289,7 +292,7 @@ export function ClientDetail() {
                   </div>
                 </PageSection>
 
-                {ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
+                {showFinancials && ct === "recurring" && client.status === "active" && client.nextInvoiceDate && (
                   <PageSection title="Volgende factuur" icon={CalendarDays}>
                     <div className="px-4 py-3 space-y-2">
                       <p className="text-sm font-medium text-text-primary">
@@ -332,7 +335,7 @@ export function ClientDetail() {
                         value={formatCycle(client.billingCycle, client.customCycleDays)}
                       />
                     )}
-                    {ct === "project" && (
+                    {showFinancials && ct === "project" && (
                       <>
                         <InfoRow
                           icon={Receipt}

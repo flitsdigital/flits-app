@@ -1,39 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { leadsDb } from '../lib/leadsDb'
 import { useAuthStore } from '../store/useAuthStore'
+import { newId } from '../lib/id'
+import {
+  readLeadsCache,
+  writeLeadsCache,
+  clearLeadsCache,
+  isLeadsCacheFresh,
+} from '../lib/leadsCache'
 import type { Lead, ContactMoment, LeadStatus } from '../types'
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 10)
-}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** Module-level cache so navigating Dashboard → Leads doesn't refetch from scratch. */
-let leadsCache: Lead[] | null = null
-let leadsCacheUserId: string | null = null
-
-function readCache(userId: string | undefined): Lead[] {
-  if (!userId || leadsCacheUserId !== userId || !leadsCache) return []
-  return leadsCache
-}
-
-function writeCache(userId: string, data: Lead[]) {
-  leadsCache = data
-  leadsCacheUserId = userId
-}
-
-function clearCache() {
-  leadsCache = null
-  leadsCacheUserId = null
-}
-
-export function useLeadsData() {
+export function useLeadsData(opts?: { enabled?: boolean }) {
+  const enabled = opts?.enabled !== false
   const sessionUserId = useAuthStore((s) => s.session?.user.id)
   const authReady = useAuthStore((s) => s.authReady)
 
-  const [leads, setLeads] = useState<Lead[]>(() => readCache(sessionUserId))
-  const [loading, setLoading] = useState(() => !readCache(sessionUserId).length)
+  const [leads, setLeads] = useState<Lead[]>(() =>
+    enabled ? readLeadsCache(sessionUserId) : [],
+  )
+  const [loading, setLoading] = useState(
+    () => enabled && !readLeadsCache(sessionUserId).length,
+  )
   const [error, setError] = useState<string | null>(null)
 
   const fetchGenRef = useRef(0)
@@ -41,10 +30,10 @@ export function useLeadsData() {
 
   const loadLeads = useCallback(
     async (opts?: { silent?: boolean }) => {
-      if (!authReady || !sessionUserId) return
+      if (!enabled || !authReady || !sessionUserId) return
 
       const generation = ++fetchGenRef.current
-      const hasCache = readCache(sessionUserId).length > 0
+      const hasCache = readLeadsCache(sessionUserId).length > 0
 
       if (!opts?.silent && !hasCache) setLoading(true)
       setError(null)
@@ -58,7 +47,7 @@ export function useLeadsData() {
           const data = await leadsDb.fetchAll()
           if (generation !== fetchGenRef.current) return
 
-          writeCache(sessionUserId, data)
+          writeLeadsCache(sessionUserId, data)
           setLeads(data)
           setError(null)
           setLoading(false)
@@ -76,13 +65,12 @@ export function useLeadsData() {
           const message =
             err instanceof Error ? err.message : 'Kon leads niet laden'
           setError(message)
-          // Keep any cached leads visible instead of clearing on failure.
           if (!hasCache) setLeads([])
           setLoading(false)
         }
       }
     },
-    [authReady, sessionUserId],
+    [enabled, authReady, sessionUserId],
   )
 
   const loadLeadsDeduped = useCallback(
@@ -100,44 +88,49 @@ export function useLeadsData() {
   )
 
   useEffect(() => {
+    if (!enabled) {
+      setLeads([])
+      setLoading(false)
+      return
+    }
     if (!authReady || !sessionUserId) {
       setLoading(!authReady)
       return
     }
 
-    const cached = readCache(sessionUserId)
+    const cached = readLeadsCache(sessionUserId)
     if (cached.length > 0) {
       setLeads(cached)
       setLoading(false)
     }
 
     void loadLeadsDeduped({ silent: cached.length > 0 })
-  }, [authReady, sessionUserId, loadLeadsDeduped])
+  }, [enabled, authReady, sessionUserId, loadLeadsDeduped])
 
-  // Revalidate when the tab regains focus (silent if we already have data).
   useEffect(() => {
+    if (!enabled) return
     function onFocus() {
-      if (authReady && sessionUserId) {
+      if (authReady && sessionUserId && !isLeadsCacheFresh(sessionUserId)) {
         void loadLeadsDeduped({ silent: leads.length > 0 })
       }
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [authReady, sessionUserId, loadLeadsDeduped, leads.length])
+  }, [enabled, authReady, sessionUserId, loadLeadsDeduped, leads.length])
 
   useEffect(() => {
-    if (!sessionUserId) clearCache()
+    if (!sessionUserId) clearLeadsCache()
   }, [sessionUserId])
 
   async function addLead(
     input: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<Lead> {
     const now = new Date().toISOString()
-    const lead: Lead = { ...input, id: generateId(), createdAt: now, updatedAt: now }
+    const lead: Lead = { ...input, id: newId(), createdAt: now, updatedAt: now }
 
     setLeads((prev) => {
       const next = [lead, ...prev]
-      if (sessionUserId) writeCache(sessionUserId, next)
+      if (sessionUserId) writeLeadsCache(sessionUserId, next)
       return next
     })
 
@@ -147,7 +140,7 @@ export function useLeadsData() {
       console.error('Failed to add lead:', err)
       setLeads((prev) => {
         const next = prev.filter((l) => l.id !== lead.id)
-        if (sessionUserId) writeCache(sessionUserId, next)
+        if (sessionUserId) writeLeadsCache(sessionUserId, next)
         return next
       })
       throw err
@@ -168,7 +161,7 @@ export function useLeadsData() {
         }
         return l
       })
-      if (sessionUserId && updatedLead) writeCache(sessionUserId, next)
+      if (sessionUserId && updatedLead) writeLeadsCache(sessionUserId, next)
       return next
     })
 
@@ -195,7 +188,7 @@ export function useLeadsData() {
         }
         return l
       })
-      if (sessionUserId && updatedLead) writeCache(sessionUserId, next)
+      if (sessionUserId && updatedLead) writeLeadsCache(sessionUserId, next)
       return next
     })
 
@@ -214,7 +207,7 @@ export function useLeadsData() {
     const previous = leads
     setLeads((prev) => {
       const next = prev.filter((l) => l.id !== id)
-      if (sessionUserId) writeCache(sessionUserId, next)
+      if (sessionUserId) writeLeadsCache(sessionUserId, next)
       return next
     })
 
@@ -223,16 +216,16 @@ export function useLeadsData() {
     } catch (err) {
       console.error('Failed to delete lead:', err)
       setLeads(previous)
-      if (sessionUserId) writeCache(sessionUserId, previous)
+      if (sessionUserId) writeLeadsCache(sessionUserId, previous)
       throw err
     }
   }
 
-  const waitingForAuth = !authReady || !sessionUserId
+  const waitingForAuth = enabled && (!authReady || !sessionUserId)
 
   return {
-    leads,
-    loading: waitingForAuth || loading,
+    leads: enabled ? leads : [],
+    loading: waitingForAuth || (enabled && loading),
     error,
     loadLeads: () => loadLeadsDeduped(),
     addLead,
@@ -281,7 +274,7 @@ export function useContactMoments(leadId: string) {
   ): Promise<void> {
     const moment: ContactMoment = {
       ...input,
-      id: generateId(),
+      id: newId(),
       createdAt: new Date().toISOString(),
     }
 

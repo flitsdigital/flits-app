@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { nl } from 'date-fns/locale'
+import { nl } from 'date-fns/locale/nl'
 import { X, Bell, CheckCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -14,12 +14,15 @@ export function InboxSheet() {
   const { notifications, markRead, markAllRead, unreadCount } = useNotifications()
   const navigate = useNavigate()
 
+  function safeNavigate(url: string) {
+    if (!/^\/[a-zA-Z0-9/_-]*$/.test(url) || url.startsWith('//')) return
+    closeInbox()
+    navigate(url)
+  }
+
   async function handleClick(id: string, url: string | null) {
     await markRead(id)
-    if (url) {
-      closeInbox()
-      navigate(url)
-    }
+    if (url) safeNavigate(url)
   }
 
   return (
