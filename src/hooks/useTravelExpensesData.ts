@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { travelExpensesDb } from '../lib/travelExpensesDb'
+import { useAuthStore } from '../store/useAuthStore'
 import type { TravelExpense, UserProfile } from '../types'
 
 export function useTravelExpensesData(isAdmin: boolean, selectedUserId: string | 'all') {
+  const authReady = useAuthStore((s) => s.authReady)
+  const sessionUserId = useAuthStore((s) => s.session?.user.id)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [expenses, setExpenses] = useState<TravelExpense[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!authReady || !sessionUserId || !isAdmin) return
     travelExpensesDb.fetchUsers().then(setUsers).catch(() => setUsers([]))
-  }, [isAdmin])
+  }, [isAdmin, authReady, sessionUserId])
 
   async function load() {
     setLoading(true)
@@ -24,7 +27,10 @@ export function useTravelExpensesData(isAdmin: boolean, selectedUserId: string |
     }
   }
 
-  useEffect(() => { load() }, [selectedUserId, isAdmin])
+  useEffect(() => {
+    if (!authReady || !sessionUserId) return
+    load()
+  }, [selectedUserId, isAdmin, authReady, sessionUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function deleteExpense(id: string) {
     await travelExpensesDb.deleteExpense(id, isAdmin)

@@ -30,7 +30,8 @@ import { useRealtimeSync } from './hooks/useRealtimeSync'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
-  const session = useAuthStore((s) => s.session)
+  const sessionUserId = useAuthStore((s) => s.session?.user.id)
+  const authReady = useAuthStore((s) => s.authReady)
   const fetchClients = useStore((s) => s.fetchClients)
 
   useRealtimeSync()
@@ -39,15 +40,18 @@ export default function App() {
     initialize()
   }, [])
 
+  // Fetch when auth is ready AND a session exists. authReady alone is not enough:
+  // on a fresh visit initialize() sets authReady=true before login, so we must
+  // re-fetch when sessionUserId appears after signIn (not only on page refresh).
   useEffect(() => {
-    if (session) fetchClients()
-  }, [session])
+    if (authReady && sessionUserId) fetchClients()
+  }, [authReady, sessionUserId, fetchClients])
 
   // Re-fetch core data when the tab becomes visible or network comes back.
   // This prevents stale/empty state after the browser paused the tab.
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === 'visible' && session) {
+      if (document.visibilityState === 'visible' && sessionUserId) {
         fetchClients()
       }
     }
@@ -57,7 +61,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', refresh)
       window.removeEventListener('online', refresh)
     }
-  }, [session, fetchClients])
+  }, [sessionUserId, fetchClients])
 
   // Global T shortcut to toggle todo panel
   useEffect(() => {

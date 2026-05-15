@@ -89,7 +89,8 @@ export const leadsDb = {
       supabase
         .from('leads')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false }),
+      15_000,
     )
     if (error) throw error
     return (data as DbLead[]).map(leadFromRow)
